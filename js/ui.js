@@ -72,13 +72,31 @@
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', route);
 
+  /* ---------- theme (light / dark) ---------- */
+  const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  UI.isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : !!(mq && mq.matches); };
+  UI.css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const themeFns = [];
+  UI.onTheme = fn => themeFns.push(fn);
+  const fireTheme = () => { UI.chartDefaults(); themeFns.forEach(fn => fn(UI.isDark())); };
+  if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (!document.documentElement.dataset.theme) fireTheme(); });
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.getElementById('themeBtn'); if (!b) return;
+    b.addEventListener('click', () => {
+      const t = UI.isDark() ? 'light' : 'dark';
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem('a1401-theme', t); } catch (e) {}
+      fireTheme();
+    });
+  });
+
   /* ---------- Chart.js defaults ---------- */
   UI.chartDefaults = () => {
     if (!window.Chart) return;
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
     Chart.defaults.font.size = 11.5;
-    Chart.defaults.color = '#4a5663';
-    Chart.defaults.borderColor = '#e6e9ee';
+    Chart.defaults.color = UI.css('--ink-2') || '#4a5663';
+    Chart.defaults.borderColor = UI.css('--line') || '#e6e9ee';
     Chart.defaults.animation = false;
     Chart.defaults.maintainAspectRatio = false;
     Chart.defaults.plugins.legend.labels.boxWidth = 12;

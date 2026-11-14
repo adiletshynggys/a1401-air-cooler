@@ -7,7 +7,7 @@
 
   const NOTE = {
     normal: 'Today: 50 % of fin gaps blocked; debris resistance fitted to the plant outlet temperature for this weather.',
-    s1: [M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.filters, M.ASSUMPTIONS.clean].join(' '),
+    s1: [M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.filters, M.ASSUMPTIONS.clean, M.ASSUMPTIONS.spray].join(' '),
     s2: [M.ASSUMPTIONS.spare, M.ASSUMPTIONS.spray, M.ASSUMPTIONS.TinFix].join(' '),
     s12: 'Solution 1 and solution 2 together: protected bundle (hood, cage, filters), standby unit, spray and 137 °C inlet.',
   };
@@ -18,7 +18,8 @@
   const W = () => M.WEATHER.find(w => w.key === st.w);
 
   function input(key, extra) {
-    const o = Object.assign({}, st.per[key]); delete o.fanMode;
+    const o = Object.assign({}, st.per[key]); delete o.fanMode; delete o.sprayOpt;
+    if (st.per[key].sprayOpt) o.spray = st.per[key].sprayOpt === 'on';
     if (st.per[key].fanMode === 'auto') delete o.fanPct;
     return M.caseParams(key, W(), Object.assign({}, st.glob, o, extra || {}));
   }
@@ -81,6 +82,7 @@
       { k: 'blockage', label: 'Fin gaps blocked', min: 0, max: 70, step: 1, unit: '%', d: 0, scale: 100 },
       { k: 'Rf', label: 'Debris resistance R_f', min: 0, max: 1, step: 0.005, unit: 'm²K/W', d: 3 },
       { k: 'fanMode', label: 'Fan control', type: 'seg', opts: [['auto', 'Auto to 65 °C'], ['manual', 'Manual']] },
+      { k: 'sprayOpt', label: 'Water spray', type: 'seg', opts: [['on', 'On when needed'], ['off', 'Off']] },
     ];
     if (st.per[st.c].fanMode === 'manual') out.push({ k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0 });
     if (p.filters) out.push({ k: 'filterDp', label: 'Filter Δp at 2.5 m/s', min: 30, max: 250, step: 5, unit: 'Pa', d: 0, tag: 'filters' });
@@ -106,7 +108,8 @@
   function syncSliders() {
     const p = P();
     for (const c of CTLS) {
-      if (c.type === 'seg') { host.querySelectorAll(`.seg[data-k="${c.k}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === st.per[st.c][c.k])); continue; }
+      if (c.type === 'seg') { const cur = c.k === 'sprayOpt' ? (p.spray ? 'on' : 'off') : st.per[st.c][c.k];
+        host.querySelectorAll(`.seg[data-k="${c.k}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === cur)); continue; }
       const v = (c.k === 'fanPct' ? st.per[st.c].fanPct : p[c.k]) * (c.scale || 1);
       const el = host.querySelector('#s-' + c.k); if (!el) continue;
       el.value = v; host.querySelector('#o-' + c.k).textContent = `${fmt(v, c.d)} ${c.unit}`;
@@ -172,7 +175,7 @@
   const rhAt = T => T <= 7 ? 85 : T <= 26 ? 85 - (T - 7) * (41 / 19) : Math.max(15, 44 - (T - 26) * (23 / 12));
   function initCharts() {
     if (!window.Chart) return;
-    const ax = (t, o) => Object.assign({ title: { display: true, text: t }, grid: { color: '#eef1f4' } }, o || {});
+    const ax = (t, o) => Object.assign({ title: { display: true, text: t }, grid: { color: UI.css('--line-2') } }, o || {});
     const opt = y => ({ showLine: true, scales: { x: ax('Air temperature, °C', { min: -15, max: 40 }), y: ax(y) },
       plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y, 1)}` } } } });
     charts.out = new Chart(document.getElementById('chOut'), { type: 'scatter', data: { datasets: [] }, options: opt('Gas outlet, °C') });
@@ -193,17 +196,19 @@
       while (i < tasks.length && performance.now() - t0 < 30) {
         const { T, c } = tasks[i++];
         const glob = Object.assign({}, st.glob, { Tamb: T, RH: rhAt(T) });
-        const o = Object.assign({}, st.per[c.key]); delete o.fanMode; if (st.per[c.key].fanMode === 'auto') delete o.fanPct;
+        const o = Object.assign({}, st.per[c.key]); delete o.fanMode; delete o.sprayOpt; if (st.per[c.key].fanMode === 'auto') delete o.fanPct;
+        if (st.per[c.key].sprayOpt) o.spray = st.per[c.key].sprayOpt === 'on';
         const p = M.caseParams(c.key, W(), Object.assign(glob, o, { nSeg: 8 }));
         const r = st.per[c.key].fanMode === 'manual' ? M.solve(p) : M.autoFan(p);
         data[c.key].out.push({ x: T, y: r.Tout }); data[c.key].pow.push({ x: T, y: r.airflow.powerElectric / 1000 });
       }
       if (i < tasks.length) return setTimeout(step, 0);
-      const ds = k => M.CASES.map(c => ({ label: c.name, data: data[c.key][k], borderColor: C[c.key],
-        borderWidth: c.key === st.c ? 3 : 1.6, pointRadius: c.key === st.c ? 2.5 : 0, pointBackgroundColor: C[c.key] }));
+      const col = k => k === 's1' ? UI.css('--accent') : k === 'normal' ? UI.css('--bad') : C[k];
+      const ds = k => M.CASES.map(c => ({ label: c.name, data: data[c.key][k], borderColor: col(c.key),
+        borderWidth: c.key === st.c ? 3 : 1.6, pointRadius: c.key === st.c ? 2.5 : 0, pointBackgroundColor: col(c.key) }));
       const Ta = st.glob.Tamb !== undefined ? st.glob.Tamb : W().Tamb;
       const now = { label: 'This weather', data: [{ x: Ta, y: 0 }], borderColor: '#9aa5b1', borderDash: [3, 3], borderWidth: 1 };
-      charts.out.data.datasets = [...ds('out'), { label: '65 °C setpoint', data: [{ x: -15, y: 65 }, { x: 40, y: 65 }], borderColor: '#17202a', borderDash: [4, 4], borderWidth: 1 }];
+      charts.out.data.datasets = [...ds('out'), { label: '65 °C setpoint', data: [{ x: -15, y: 65 }, { x: 40, y: 65 }], borderColor: UI.css('--ink'), borderDash: [4, 4], borderWidth: 1 }];
       const top = Math.max(...charts.out.data.datasets.flatMap(d => d.data.map(p => p.y)));
       charts.out.data.datasets.push(Object.assign({}, now, { data: [{ x: Ta, y: 0 }, { x: Ta, y: top }] }));
       charts.out.update();
@@ -235,10 +240,18 @@
     const on = name === 'simulator';
     if (on && !inited) {
       inited = true;
-      Scene3D.init(document.getElementById('viewer'));
+      Scene3D.init(document.getElementById('viewer')); Scene3D.setTheme(UI.isDark());
       initCharts(); buildSliders(); update(true);
     }
     Scene3D.setRunning(on);
+  });
+  UI.onTheme(dark => {
+    Scene3D.setTheme(dark);
+    for (const ch of Object.values(charts)) {
+      for (const ax of Object.values(ch.options.scales)) { ax.grid.color = UI.css('--line-2'); ax.ticks.color = UI.css('--ink-2'); ax.title.color = UI.css('--ink-2'); }
+      ch.options.plugins.legend.labels.color = UI.css('--ink-2');
+    }
+    if (inited) sweep();
   });
   window.Simulator = { state: st, run };
 })();

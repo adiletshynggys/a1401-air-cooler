@@ -5,13 +5,13 @@
 | Case | What changes in the model |
 |---|---|
 | **Normal** | Today: 50 % of fin gaps blocked, debris resistance R_f fitted to the plant outlet temperature (0.36–0.43 m²K/W). |
-| **Solution 1**: hood + cage + filters | A hood over the top turns the air 90° with a round fillet to a side outlet, so rain, dust and insects cannot fall in. An outer wire-mesh cage and filter panels on the fan sides and in front of the fan keep debris out. The bundle is cleaned once and stays near-clean (3 % blocked, R_f 0.02). Costs: extra air-side pressure drop (hood turn + outlet, cage, filters). |
+| **Solution 1**: hood + cage + filters + spray | A hood over the top turns the air 90° with a round fillet to a side outlet, so rain, dust and insects cannot fall in. An outer wire-mesh cage and filter panels on the fan sides and in front of the fan keep debris out. The bundle is cleaned once and stays near-clean (3 % blocked, R_f 0.02). Water spray is fitted too and runs only when the fans alone cannot reach 65 °C. Costs: extra air-side pressure drop (hood turn + outlet, cage, filters). |
 | **Solution 2**: standby cooler + spray + 137 °C | A second identical cooler; one runs while the other is cleaned, so the online unit is on average early in its fouling cycle (12 % blocked, R_f 0.08). Water spray pre-cools the inlet air toward the wet bulb, only when the fans alone cannot reach 65 °C. E-1408 is restored, so the gas enters at 137 °C instead of ~167 °C. |
 | **1 + 2** | Both together. |
 
-Weather buttons: Winter (−3.4 °C), 14 Nov (7 °C), Summer mean (25.9 °C), Hot day (38 °C), from the Atyrau airport (UATG) records. The fan follows the plant controller TICA0055: the lowest output that reaches the 65 °C setpoint, else 100 %. The comparison table and the two charts (outlet temperature and fan power against air temperature) show every case at once. **Adjust** opens the sliders; the button at the top right, or the F key, makes the 3D view full screen.
+Weather buttons: Winter (−3.4 °C), 14 Nov (7 °C), Summer mean (25.9 °C), Hot day (38 °C), from the Atyrau airport (UATG) records. The fan follows the plant controller TICA0055: the lowest output that reaches the 65 °C setpoint, else 100 %. The comparison table and the two charts (outlet temperature and fan power against air temperature) show every case at once. **Adjust** opens the sliders, including a water-spray switch for every case; the button at the top right, or the F key, makes the 3D view full screen.
 
-No build step: plain HTML/CSS/JS, three.js and Chart.js from a CDN with local copies in `vendor/`. The second tab is the process overview of the cooling train.
+No build step: plain HTML/CSS/JS, three.js and Chart.js from a CDN with local copies in `vendor/`. The second tab is the process overview of the cooling train. The sun/moon button switches between light and dark themes (default: the system setting).
 
 ## Run
 

@@ -10,8 +10,8 @@
   const Y1 = 150, Y2 = 430;
   const shell = (x, y, w, tag, desc, hl) => `
     <g><rect class="eq${hl ? ' hl' : ''}" x="${x}" y="${y - 17}" width="${w}" height="34" rx="17"/>
-    <line x1="${x + 16}" y1="${y - 17}" x2="${x + 16}" y2="${y + 17}" stroke="#4a5663" stroke-width="1"/>
-    <line x1="${x + w - 16}" y1="${y - 17}" x2="${x + w - 16}" y2="${y + 17}" stroke="#4a5663" stroke-width="1"/>
+    <line x1="${x + 16}" y1="${y - 17}" x2="${x + 16}" y2="${y + 17}" class="ln" stroke-width="1"/>
+    <line x1="${x + w - 16}" y1="${y - 17}" x2="${x + w - 16}" y2="${y + 17}" class="ln" stroke-width="1"/>
     <text class="tagname" x="${x + w / 2}" y="${y + 36}" text-anchor="middle">${tag}</text>
     <text class="desc" x="${x + w / 2}" y="${y + 50}" text-anchor="middle">${desc}</text></g>`;
 
@@ -26,7 +26,7 @@
   svg.innerHTML = `
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#4a5663"/></marker>
+      <path d="M0,0 L10,5 L0,10 z" class="lnf"/></marker>
   </defs>
   ${pipeKeys.map(k => `<path class="pipe" d="${pipes[k]}"/>`).join('')}
   ${pipeKeys.map(k => `<path class="pipe-flow${k === 'pLiq' ? ' liq' : k === 'pFlare' ? ' flare' : ''}" id="f-${k}" d="${pipes[k]}"/>`).join('')}
@@ -43,8 +43,8 @@
   <g id="eqA1401">
     <rect class="eq hl" x="820" y="${Y1 - 30}" width="200" height="40" rx="3"/>
     ${[0, 1, 2, 3, 4, 5].map(i => `<line x1="828" x2="1012" y1="${Y1 - 24 + i * 6}" y2="${Y1 - 24 + i * 6}" stroke="#0b5cad" stroke-width="1" opacity=".55"/>`).join('')}
-    <path d="M830 ${Y1 + 10} L860 ${Y1 + 40} H980 L1010 ${Y1 + 10}" fill="none" stroke="#4a5663" stroke-width="1.2"/>
-    ${[880, 960].map(x => `<g transform="translate(${x} ${Y1 + 52})"><ellipse rx="26" ry="6" fill="#fff" stroke="#4a5663"/>
+    <path d="M830 ${Y1 + 10} L860 ${Y1 + 40} H980 L1010 ${Y1 + 10}" fill="none" class="ln" stroke-width="1.2"/>
+    ${[880, 960].map(x => `<g transform="translate(${x} ${Y1 + 52})"><ellipse rx="26" ry="6" class="ln bgf"/>
       <g class="fanspin"><line x1="-22" x2="22" y1="0" y2="0" stroke="#0b5cad" stroke-width="2.5"/></g></g>`).join('')}
     <text class="tagname" x="920" y="${Y1 - 42}" text-anchor="middle">A-1401  air cooler</text>
     <text class="desc" x="920" y="${Y1 + 80}" text-anchor="middle">3 sections · 6 bundles · forced draft</text>
@@ -61,7 +61,7 @@
   <text class="desc" x="655" y="${Y2 + 72}">separator</text></g>
 
   <!-- PV0017 valve + flare -->
-  <g transform="translate(360 302)"><path d="M-9 -8 L9 8 M-9 8 L9 -8" stroke="#4a5663" stroke-width="2"/></g>
+  <g transform="translate(360 302)"><path d="M-9 -8 L9 8 M-9 8 L9 -8" class="ln" stroke-width="2"/></g>
   <g><path d="M352 272 L360 236 L368 272 Z" class="eq"/><path d="M360 232 q-8 -12 0 -24 q8 13 0 24" fill="#e9a36b" stroke="#c0603a"/>
   <text class="tagname" x="380" y="252">Flare</text><text class="desc" x="380" y="266">via PV0017 (Y), not metered</text></g>
 

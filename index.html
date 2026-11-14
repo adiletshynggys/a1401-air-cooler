@@ -6,6 +6,7 @@
 <title>A-1401 Air Cooler Simulator</title>
 <meta name="description" content="3D simulator of the A-1401 syngas air cooler: today's fouled cooler against two solutions. AIChE Catalyst hackathon.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230b5cad%27/%3E%3Cpath d=%27M3 6h10M3 8h10M3 10h10%27 stroke=%27white%27/%3E%3C/svg%3E">
+<script>try { var t = localStorage.getItem('a1401-theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -20,6 +21,10 @@
   <nav class="tabs" role="tablist">
     <a href="#simulator" role="tab" data-tab="simulator">Simulator</a>
     <a href="#overview" role="tab" data-tab="overview">Process overview</a>
+    <button class="icon-btn theme-btn" id="themeBtn" type="button" title="Dark / light theme" aria-label="Toggle dark theme">
+      <svg class="sun" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    </button>
   </nav>
 </header>
 

@@ -9,7 +9,7 @@
   const S3 = {};
   let renderer, scene, camera, container, ctl, clock;
   let rowMeshes = [], debrisMeshes = [], mats = [], coilGroup, fans = [], particles, pdata;
-  let fanGroup, fanKey = '', hoodGroup, cageGroup, filterGroup, sprayGroup, mist, spareGroup;
+  let groundGrid, cageMats = [], fanGroup, fanKey = '', hoodGroup, cageGroup, filterGroup, sprayGroup, mist, spareGroup;
   let state = { fan: 0.88, speed: 1.5, field: null, tmin: 0, tmax: 170, airOut: null, coilOn: false, hood: false, mistOn: false, tamb: 7 };
   const FAN_Y = 2.3;
   const HOOD_H = 3.2, HOOD_R = 2.6;          // hood height above the top row and fillet radius
@@ -114,9 +114,10 @@
     cageGroup = new THREE.Group();
     const cx = L + 3.8, cz = FW + 2.0, h = topY + HOOD_H + 0.2;
     const make = (w, rep) => {
-      const tx = gridTexture(64, 2, '#6b7785'); tx.repeat.set(rep, h / 0.35);
-      return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx, transparent: true,
-        side: THREE.DoubleSide, depthWrite: false, opacity: 0.5 }));
+      const tx = gridTexture(64, 2, '#ffffff'); tx.repeat.set(rep, h / 0.35);
+      const mat = new THREE.MeshBasicMaterial({ map: tx, color: 0x6b7785, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.55 });
+      cageMats.push(mat);
+      return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
     };
     const faces = [[cx, 0, cz / 2, 0], [cx, 0, -cz / 2, 0], [cz, cx / 2, 0, Math.PI / 2], [cz, -cx / 2, 0, Math.PI / 2]];
     for (const [w, x, z, ry] of faces) {
@@ -260,8 +261,12 @@
   }
   function label(text, size) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 96;
-    const g = c.getContext('2d'); g.font = `600 ${size || 56}px system-ui, sans-serif`; g.fillStyle = '#17202a';
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 128, 48);
+    const g = c.getContext('2d'); g.font = `600 ${size || 56}px system-ui, sans-serif`;
+    // pill behind the text: readable on light and dark backgrounds
+    const w = Math.min(248, g.measureText(text).width + 28), h = (size || 56) * 1.25;
+    g.fillStyle = 'rgba(255,255,255,0.82)';
+    g.beginPath(); g.roundRect ? g.roundRect(128 - w / 2, 48 - h / 2, w, h, h / 2) : g.rect(128 - w / 2, 48 - h / 2, w, h); g.fill();
+    g.fillStyle = '#17202a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 128, 48);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }));
     sp.scale.set(2.4, 0.9, 1); return sp;
   }
@@ -281,7 +286,7 @@
     const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-12, 25, 18); scene.add(sun);
 
     // ground
-    const grid = new THREE.GridHelper(60, 30, 0xc5ccd3, 0xdde2e8); scene.add(grid);
+    groundGrid = new THREE.GridHelper(90, 45, 0xc5ccd3, 0xdde2e8); scene.add(groundGrid);
 
     const steel = new THREE.MeshStandardMaterial({ color: 0x6b7785, roughness: 0.7, metalness: 0.3 });
     const frameW = 3 * (2 * W + 2 * GAP) + 0.6, frameL = L + 0.6;
@@ -450,6 +455,16 @@
     if (!built) return;
     if (on && !running) { running = true; clock.getDelta(); resize(); tick(); }
     else if (!on) running = false;
+  };
+
+  /** Light or dark page: ground grid and cage mesh colours. */
+  S3.setTheme = function (dark) {
+    if (!built) return;
+    // rebuild the ground grid in the theme's colours
+    scene.remove(groundGrid); groundGrid.geometry.dispose();
+    groundGrid = dark ? new THREE.GridHelper(90, 45, 0x3a4652, 0x252f39) : new THREE.GridHelper(90, 45, 0xc5ccd3, 0xdde2e8);
+    scene.add(groundGrid);
+    cageMats.forEach(m => m.color.set(dark ? 0xa9b6c3 : 0x6b7785));
   };
 
   /** Update visuals from a model result. */

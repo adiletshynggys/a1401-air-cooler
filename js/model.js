@@ -651,11 +651,11 @@
   ];
   const SETPOINT = 65;   // TICA0055
 
-  const S1 = { hood: true, cage: true, filters: true, blockage: 0.03, Rf: 0.02 };
+  const S1 = { hood: true, cage: true, filters: true, spray: true, blockage: 0.03, Rf: 0.02 };
   const S2 = { spare: true, spray: true, Tin: 137, blockage: 0.12, Rf: 0.08 };
   const CASES = [
     { key: 'normal', name: 'Normal', sub: 'today, fouled', set: w => ({ blockage: 0.5, Rf: w.Rf }) },
-    { key: 's1', name: 'Solution 1', sub: 'hood + cage + filters', set: () => S1 },
+    { key: 's1', name: 'Solution 1', sub: 'hood + cage + filters + spray', set: () => S1 },
     { key: 's2', name: 'Solution 2', sub: 'standby cooler + spray + 137 °C', set: () => S2 },
     { key: 's12', name: '1 + 2', sub: 'all together', set: () => Object.assign({}, S2, S1) },
   ];
