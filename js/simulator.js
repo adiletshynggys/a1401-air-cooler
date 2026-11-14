@@ -6,12 +6,12 @@
 
   /* Fitted fouling from the calibration (blockage held at 50 %, uniform). The Validation
    * tab recomputes these live; presets are refreshed when it finishes. */
-  const FIT = { blockage: 0.5, Rf_now: 0.402, Rf_summer: 0.443 };
+  const FIT = { blockage: 0.5, Rf_now: 0.408, Rf_summer: 0.480 };
   const PRESETS = {
-    clean: { Tamb: 5, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: 0, Rf: 0, foulMode: 'uniform' },
-    now: { Tamb: 5, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: FIT.blockage, Rf: FIT.Rf_now, foulMode: 'uniform' },
-    summer: { Tamb: 30, flow: 18122, Tin: 160.7, fanPct: 99.4, blockage: FIT.blockage, Rf: FIT.Rf_summer, foulMode: 'uniform' },
-    design: { Tamb: 35, flow: 21000, Tin: 137, fanPct: 100, blockage: 0, Rf: 0, foulMode: 'uniform' },
+    clean: { Tamb: 7, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: 0, Rf: 0, foulMode: 'uniform' },
+    now: { Tamb: 7, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: FIT.blockage, Rf: FIT.Rf_now, foulMode: 'uniform' },
+    summer: { Tamb: 25.9, flow: 18122, Tin: 160.7, fanPct: 99.4, blockage: FIT.blockage, Rf: FIT.Rf_summer, foulMode: 'uniform' },
+    design: { Tamb: 38, flow: 21000, Tin: 137, fanPct: 100, blockage: 0, Rf: 0, foulMode: 'uniform' },
   };
   const D = M.DEFAULTS;
   let P = Object.assign({}, D, PRESETS.now);

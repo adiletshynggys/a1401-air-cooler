@@ -110,7 +110,7 @@
     fpi: 11, finT: 0.0004, finMaterial: 'Al',
     passes: 6,                    // assumption: one row per pass, gas enters the top row
     // --- fans (forced draft, underneath) --------------------------------
-    nFans: 6, fanD: 2.4, fanRpm: 480,
+    nFans: 6, fanD: 4.2, fanRpm: 250,  // assumption: sized to API 661 (≥ 40 % coverage, tip ≤ 60 m/s)
     psi0: 0.065,                  // shut-off static pressure coefficient Δp0/(ρ u_tip²)
     phi0: 0.28,                   // free-delivery flow coefficient Q0/(u_tip·D²)
     fanEff: 0.70, motorEff: 0.93,
@@ -118,7 +118,7 @@
     plenumK: 1.5,                 // inlet bell + guard + plenum + exit, in fan velocity heads
     steamCoil: false,             // 1 finned row below the bundle (air inlet side)
     // --- process ----------------------------------------------------------
-    Tamb: 5, Tin: 166.9, flow: 20979, fanPct: 88.2,
+    Tamb: 7, Tin: 166.9, flow: 20979, fanPct: 88.2,
     Pin: 2.739e6, Pout: 2.705e6,  // 26.90 / 26.55 kgf/cm² g (balance.py)
     patm: 101.6e3,                // Atyrau, ~ -20 m elevation
     saturatedInlet: true,
@@ -138,9 +138,9 @@
     finT: 'Typical rolled Al fin thickness; not on the drawing.',
     tubesPerBundle: 'Back-calculated: 226 m² bare / (π·0.025 m·10.5 m) = 274 tubes.',
     passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
-    nFans: 'Two fans per section (6 in total). To be confirmed with the fan datasheet.',
-    fanD: 'Fan diameter ~2.4 m (team estimate). Gives only ~14 % fan coverage of the bundle face — check against the datasheet.',
-    fanRpm: 'Fan speed; sets tip speed and therefore the fan curve via the affinity laws.',
+    nFans: 'Two fans per section, 6 in total (forced draft, 10.5 × 6 m bay of two bundles). Fan datasheet not available.',
+    fanD: 'No fan datasheet. Sized to API 661: 2 fans per 63 m² bay need ≥ 40 % coverage → Ø ≥ 4.0 m; 4.2 m is the next standard size. The earlier team estimate of ~2.4 m (14 % coverage) is within the slider range and changes the fitted fouling by only ~5 %.',
+    fanRpm: 'No fan datasheet. 250 rpm gives a 55 m/s tip speed, below the API 661 limit of 60 m/s. Sets the fan curve via the affinity laws.',
     psi0: 'Generic axial-fan curve shape (shut-off pressure coefficient).',
     phi0: 'Generic axial-fan curve shape (free-delivery flow coefficient).',
     fanEff: 'Fan static efficiency, typical 0.65–0.75.',
@@ -148,8 +148,8 @@
     plenumK: 'Loss coefficient of inlet bell, guard, plenum and bundle exit, in fan velocity heads.',
     hFilm: 'Condensate film coefficient inside the tube (range 1500–3000 W/m²K).',
     gasProps: 'Syngas viscosity and conductivity from simple mixing rules (±20 %).',
-    Tamb: 'Ambient temperature is not in the plant dataset; calibration values are typical for the period.',
-    designTamb: 'Design air temperature for the 137 → 60 °C design case is not in the files; 35 °C assumed.',
+    Tamb: 'Measured: hourly METAR air temperature at Atyrau airport (UATG), Iowa Environmental Mesonet archive, averaged over the same hours as the plant case (tools/weather.js).',
+    designTamb: 'Design air temperature is not in the files. 38 °C = temperature exceeded in 1 % of Jun–Aug hours at UATG, 2024–2026 (tools/weather.js).',
     steamCoil: 'Optional steam heating coil modelled as one extra finned row (same fins) on the air-inlet side.',
     patm: 'Atmospheric pressure at Atyrau (~20 m below sea level).',
   };
@@ -552,11 +552,13 @@
 
   /* Calibration targets (scenarios.json / balance.py, ambient from weather — see ASSUMPTIONS). */
   const TARGETS = [
-    { key: 'design', name: 'Design (P&ID)', Tin: 137, flow: 21000, Tamb: 35, fanPct: 100, Tout: 60, clean: true,
-      note: 'Clean bundle, fans 100 %, design air temperature assumed 35 °C' },
-    { key: 'now', name: '14 Nov 2026', Tin: 166.9, flow: 20979, Tamb: 5, fanPct: 88.2, Tout: 65.1, Q: 4.50, latent: 0.80,
+    { key: 'design', name: 'Design (P&ID)', Tin: 137, flow: 21000, Tamb: 38, fanPct: 100, Tout: 60, clean: true,
+      note: 'Clean bundle, fans 100 %, design air 38 °C (1 % summer exceedance)' },
+    { key: 'winter', name: 'Winter 2024–25', Tin: 166.1, flow: 24119, Tamb: -3.4, fanPct: 77.0, Tout: 78.9, Q: 4.84,
+      note: 'Dec 2024 – Feb 2025 average' },
+    { key: 'now', name: '14 Nov 2026', Tin: 166.9, flow: 20979, Tamb: 7, fanPct: 88.2, Tout: 65.1, Q: 4.50, latent: 0.80,
       note: 'Snapshot 14:00, controller on setpoint' },
-    { key: 'summer', name: 'Summer 2025', Tin: 160.7, flow: 18122, Tamb: 30, fanPct: 99.4, Tout: 72.3, Q: 3.17,
+    { key: 'summer', name: 'Summer 2025', Tin: 160.7, flow: 18122, Tamb: 25.9, fanPct: 99.4, Tout: 72.3, Q: 3.17,
       note: 'Jun–Aug 2025 average, fans saturated 90 % of hours' },
   ];
 

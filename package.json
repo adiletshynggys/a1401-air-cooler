@@ -2,5 +2,5 @@
   "name": "a1401-air-cooler",
   "private": true,
   "description": "A-1401 syngas air cooler model (static site, no build step)",
-  "scripts": { "test": "node --test tests/" }
+  "scripts": { "test": "node --test tests/model.test.js" }
 }

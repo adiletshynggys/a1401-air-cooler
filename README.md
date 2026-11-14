@@ -13,7 +13,7 @@ No build step. Plain HTML/CSS/JS, three.js and Chart.js from a CDN with local co
 |---|---|
 | Process overview | Animated flow diagram R-1405 → E-1406 → E-1407 → E-1408 → A-1401 → E-1409 → E-1410 → D-1403 → PSA / flare, with T, P and flow at each point; X, Y, Z and the A-1401 heat load for the Design / Winter 24-25 / Summer 2025 / Now scenarios (`data/scenarios.json`). |
 | A-1401 simulator | 3D model (3 sections, 6 bundles, 6 rows, forced-draft fans, plenum, optional steam coil) coloured by gas temperature cell by cell, debris shell that follows the fouling sliders, and air particles whose speed follows the computed face velocity. Sliders, readouts and five charts: (a) fan vs system curve; (b) duty and outlet T vs blockage at 0/20/35 °C; (c) duty and gas temperature row by row; (d) duty vs fan power, clean vs fouled; (e) 137 °C design vs 167 °C actual inlet. |
-| Plant data | Load the hourly CSV in the browser (nothing is uploaded). Frozen and shutdown hours are excluded, then outlet T, fan output and flow are plotted, with hours at fans ≥ 99 % highlighted. Once an Atyrau (UATG) weather CSV is loaded, the daily cleanliness factor UA_actual / UA_clean_model is computed. |
+| Plant data | Load the hourly CSV in the browser (nothing is uploaded). Frozen and shutdown hours are excluded, then outlet T, fan output and flow are plotted, with hours at fans ≥ 99 % highlighted. Hourly Atyrau airport (UATG) air temperatures are built in, so the daily cleanliness factor UA_actual / UA_clean_model is computed as soon as the plant CSV is loaded. Another weather CSV (`timestamp, T_amb`) can be dropped in to replace it. |
 | Validation | Calibration targets vs the model, fitted fouling, cleanliness factor and energy-balance closure, computed live. |
 
 ## Run
@@ -26,12 +26,12 @@ start index.html            # Windows; or double-click it
 python -m http.server 8000  # then http://localhost:8000
 
 # physics tests (node ≥ 18, no dependencies)
-node --test tests/
+node --test tests/model.test.js
 ```
 
 Deployment: push to `main` and the workflow in `.github/workflows/pages.yml` runs the tests and publishes the folder to GitHub Pages. In the repository settings, set Pages → Source to "GitHub Actions".
 
-**Plant data is not in the repository.** `.gitignore` excludes `*.csv`/`*.tsv` in `data/` because the hourly export and weather files may be confidential. The Plant data tab reads them from your disk when you choose or drop the files.
+**Plant data is not in the repository.** `.gitignore` excludes `*.csv`/`*.tsv` in `data/` because the hourly export may be confidential. The Plant data tab reads it from your disk when you choose or drop the file. The one exception is `data/weather_uatg.csv`, public METAR data (see below).
 
 ## Files
 
@@ -46,6 +46,8 @@ js/plant.js           CSV loading, cleaning, cleanliness factor
 js/validation.js      calibration panel
 data/scenarios.json   output of tools/balance.py (scenarios.js = same data for file://)
 tools/balance.py      plant mass and energy balance that produced scenarios.json
+tools/weather.js      downloads UATG METAR → data/weather_uatg.csv/.js, prints scenario ambients
+data/weather_uatg.*   hourly air temperature, Atyrau airport, Nov 2023 – Nov 2026
 tests/model.test.js   14 unit tests (node:test)
 vendor/               three.js r149, Chart.js 4.4.1 (offline fallback)
 ```
@@ -107,7 +109,7 @@ Overall, per metre of tube: 1/UA' = 1/(h_i π d_i) + R_w' + 1/UA'_air.
 ### Fans and the operating point
 
 - Generic axial fan curve per fan: Δp = Δp₀ (s² − (q/Q₀)²), where s = fan output (treated as speed), Δp₀ = ψ₀ ρ u², Q₀ = φ₀ u D², u = π D n / 60 · k_fan. ψ₀ = 0.065 and φ₀ = 0.28 (**assumption**). This obeys the affinity laws: Q ∝ s, Δp ∝ s², P ∝ s³.
-- Fans: 6 × Ø 2.4 m at 480 rpm (**assumption**: team estimate, to be confirmed). Note: this is only about 14 % fan coverage of the 189 m² face; API 661 asks for ≥ 40 %.
+- Fans: 6 × Ø 4.2 m at 250 rpm (**assumption**, no fan datasheet). Two fans per 10.5 × 6 m bay (63 m²). API 661 asks for ≥ 40 % fan coverage of the bay face, which needs Ø ≥ 4.0 m; 4.2 m is the next standard size. 250 rpm gives a 55 m/s tip speed, under the API 661 limit of 60 m/s. Checks: face velocity 2.2 m/s at 100 % (typical 2–3.5 m/s) and about 22 kW shaft power per fan in summer (a 30 kW motor class). The earlier team estimate, Ø 2.4 m at 480 rpm, covers only 14 % of the face; it stays reachable on the sliders and changes the fitted fouling by only ~5 %.
 - System curve: Σ row Δp (+ steam coil row) + K_plenum · ½ ρ v_fan², with K_plenum = 1.5 (**assumption**).
 - The operating point is the bisection intersection of the two curves. Fan shaft power = Q Δp / η_fan, η_fan = 0.70 (**assumption**); electric power uses η_motor = 0.93.
 
@@ -126,20 +128,24 @@ Targets:
 
 | Case | Inlet → outlet | Flow | Fans | Ambient | Duty (balance.py) |
 |---|---|---|---|---|---|
-| Design (P&ID) | 137 → 60 °C | 21,000 Nm³/h | 100 % | 35 °C **assumption** | 2.0 MW |
-| 14 Nov 2026 | 166.9 → 65.1 °C | 20,979 Nm³/h | 88 % | 5 °C | 4.50 MW, 80 % latent |
-| Summer 2025 | 160.7 → 72.3 °C | 18,122 Nm³/h | 99 % | 30 °C | 3.17 MW |
+| Design (P&ID) | 137 → 60 °C | 21,000 Nm³/h | 100 % | 38 °C **assumption** (1 % summer exceedance at UATG) | 2.0 MW |
+| Winter 2024–25 | 166.1 → 78.9 °C | 24,119 Nm³/h | 77 % | −3.4 °C, measured | 4.84 MW |
+| 14 Nov 2026 | 166.9 → 65.1 °C | 20,979 Nm³/h | 88 % | 7 °C, measured | 4.50 MW, 80 % latent |
+| Summer 2025 | 160.7 → 72.3 °C | 18,122 Nm³/h | 99 % | 25.9 °C, measured | 3.17 MW |
+
+Ambient temperatures are hourly METAR observations at Atyrau airport (UATG) from the Iowa Environmental Mesonet archive, averaged over the same period as each plant case (`node tools/weather.js`). Winter and summer are means over all hours of the period; 14 Nov is the 14:00 value.
 
 Only fan scaling and fouling are tuned. Results, also shown live in the Validation tab:
 
-- **Duty and condensation match.** The model gives 4.51 MW (80 % latent) and 3.18 MW, within 0.3 % of balance.py. The gas-duty routine reproduces all four scenarios.json cases within 1.5 % (balance.py uses CoolProp).
-- **The cooler works at about 7 % of the clean model's UA.**
-  - With the drawing geometry and the assumed fans, a clean A-1401 has UA ≈ 508 kW/K and would cool the gas almost to ambient.
+- **Duty and condensation match.** The model gives 4.84 MW (winter), 4.51 MW (14 Nov, 80 % latent) and 3.18 MW (summer), within 0.3 % of balance.py. The gas-duty routine reproduces all four scenarios.json cases within 1.5 % (balance.py uses CoolProp).
+- **The cooler works at about 6 % of the clean model's UA.**
+  - With the drawing geometry and the assumed fans, a clean A-1401 has UA ≈ 620 kW/K and would cool the gas almost to ambient.
   - The plant behaves like UA ≈ 38 kW/K.
-  - The cleanliness factor UA_actual/UA_clean_model is 0.073 on 14 Nov and 0.068 in summer 2025. The two seasons agree.
-- **Fitted fouling.** Fan scaling is held at 1.0: there is no airflow or fan-power measurement to fit it, and the clean design case is not binding. With 50 % of the fin gaps packed and fouling spread over all rows, the fitted R_f is 0.40 m²K/W (Nov) and 0.44 m²K/W (summer). Other blockage/R_f pairs fit equally well (0 % → 0.77, 35 % → 0.51, 70 % → 0.25 m²K/W). Two operating points cannot separate them.
+  - The cleanliness factor UA_actual/UA_clean_model is 0.056 in winter 2024–25, 0.060 on 14 Nov and 0.053 in summer 2025, at measured air temperatures from −3 to 26 °C. The seasons agree within 13 %, so the loss belongs to the cooler, not the weather.
+  - With the 2.4 m team-estimate fans the factors are 0.065–0.075. Fan size does not explain the gap.
+- **Fitted fouling.** Fan scaling is held at 1.0: there is no airflow or fan-power measurement to fit it, and the clean design case is not binding. With 50 % of the fin gaps packed and fouling spread over all rows, the fitted R_f is 0.43 m²K/W (winter), 0.41 m²K/W (Nov) and 0.48 m²K/W (summer). Other blockage/R_f pairs fit equally well (0 % → 0.78, 35 % → 0.52, 70 % → 0.25 m²K/W). The plant points cannot separate them.
 - **Bottom-row fouling alone cannot explain the data.** With 95 % of the bottom row blocked and R_f = 1, the clean rows above still cool the gas to ambient. The loss is spread over the bundle, or the airflow is much lower than assumed.
-- **Caution.** To meet the design point (137 → 60 °C) at 35–45 °C air, the clean model needs only 7–9 % of its UA, about the same UA the plant shows now. Either the design carries a very large margin, or an assumption is optimistic: fan number, size and coverage, tube passes, or fin geometry. These documents would settle it:
+- **Caution.** To meet the design point (137 → 60 °C) at 38 °C air, the clean model needs only 6 % of its UA, about the same UA the plant shows now. Either the design carries a very large margin, or an assumption is optimistic: fan number, size and coverage, tube passes, or fin geometry. These documents would settle it:
   - fan datasheet: number, diameter, rpm, motor kW, pitch control;
   - API 661 data sheet: design duty, air flow, design air temperature, number of passes;
   - one measured fan current or air velocity.
@@ -152,15 +158,14 @@ Only fan scaling and fouling are tuned. Results, also shown live in the Validati
 | fin density and thickness | 11 fpi, 0.40 mm |
 | fin OD | 56.9 mm, back-calculated |
 | tube passes | 6 |
-| fans | 6 × Ø 2.4 m, 480 rpm, ψ₀ = 0.065, φ₀ = 0.28 |
+| fans | 6 × Ø 4.2 m, 250 rpm (sized to API 661), ψ₀ = 0.065, φ₀ = 0.28 |
 | fan efficiency | 0.70 |
 | motor efficiency | 0.93 |
 | plenum loss | K = 1.5 |
 | condensate film h | 2000 W/m²K |
 | syngas viscosity and conductivity | mixing rules |
 | atmospheric pressure | 101.6 kPa |
-| design ambient | 35 °C |
-| ambient for the Nov and summer cases | 5 °C and 30 °C |
+| design ambient | 38 °C (1 % Jun–Aug exceedance at UATG, 2024–2026) |
 | fan output | taken as fan speed |
 | steam coil | one extra finned row |
 
@@ -173,6 +178,8 @@ Also simplified:
 ## Sources
 
 - Plant: P&ID and drawing data, model code GP10.5×3-6-226-4.0S-23.4/DR; hourly PI export (1400TIA050, 1400TICA0055 PV/MV, 1400PICA0017 MV, 1400FI010); D-1403 lab analysis; `tools/balance.py` → `data/scenarios.json`.
+- Weather: hourly METAR, Atyrau airport (ICAO UATG), Iowa Environmental Mesonet ASOS/METAR archive, https://mesonet.agron.iastate.edu/request/download.phtml.
+- API Standard 661, *Petroleum, petrochemical and natural gas industries — Air-cooled heat exchangers*: ≥ 40 % fan coverage, fan tip speed ≤ 60 m/s.
 - Wagner, W., Pruss, A. (1993). International equations for the saturation properties of ordinary water substance. *J. Phys. Chem. Ref. Data* 22, 783.
 - Watson, K. M. (1943). Thermodynamics of the liquid state. *Ind. Eng. Chem.* 35, 398.
 - Briggs, D. E., Young, E. H. (1963). Convection heat transfer and pressure drop of air flowing across triangular pitch banks of finned tubes. *Chem. Eng. Prog. Symp. Ser.* 59(41), 1–10.

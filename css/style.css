@@ -48,6 +48,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 20px 24px 40px; }
 .assume { display: inline-block; font: 600 10px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.04em;
   color: #8a5a00; background: #fff4dc; border: 1px solid #f0d9a6; border-radius: 4px; padding: 2px 4px;
   cursor: help; position: relative; vertical-align: 1px; white-space: nowrap; }
+.assume.src { color: #1d6b3a; background: #e3f5e9; border-color: #b6e0c3; }
 .tip { position: fixed; z-index: 100; max-width: 320px; background: var(--ink); color: #fff; font-size: 12px; line-height: 1.4;
   padding: 8px 10px; border-radius: 6px; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 

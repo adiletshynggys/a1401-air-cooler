@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 20
       - name: Physics unit tests (no dependencies)
-        run: node --test tests/
+        run: node --test tests/model.test.js
 
   deploy:
     needs: test

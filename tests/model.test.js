@@ -76,9 +76,16 @@ test('blockage raises the row pressure drop and cuts the airflow', () => {
 test('fan operating point lies on both curves and follows affinity laws', () => {
   const r = M.solve({ fanPct: 100 });
   close(r.airflow.dp, r.airflow.sys.total, 1e-3, 'fan Δp = system Δp');
-  const r50 = M.solve({ fanPct: 50 });
-  close(r50.airflow.Q / r.airflow.Q, 0.5, 0.03, "Q ∝ speed (system Δp ∝ Q^1.7–2)");
-  close(r50.airflow.powerShaft / r.airflow.powerShaft, 0.125, 0.03, 'power ∝ speed³');
+  // affinity laws on the fan curve itself: Δp(sQ, s) = s² Δp(Q, 1)
+  const fp = M.fanParams(r.params, r.air), n = r.params.nFans, Q = r.airflow.Q;
+  for (const s of [0.5, 0.8]) close(M.fanDP(fp, n, s * Q, s), s * s * M.fanDP(fp, n, Q, 1), 1e-9, 'fan Δp ∝ speed²');
+  // operating point at half speed: Q/Q100 = 0.5 for a purely quadratic system, lower when the
+  // bundle Δp goes as Q^1.7 (Robinson–Briggs) — never above 0.5
+  const r50 = M.solve({ fanPct: 50 }), q = r50.airflow.Q / r.airflow.Q;
+  assert.ok(q > 0.42 && q <= 0.5 + 1e-9, `Q ratio ${q}`);
+  const pw = r50.airflow.powerShaft / r.airflow.powerShaft;
+  close(pw, q * r50.airflow.dp / r.airflow.dp, 1e-6, 'power = Q·Δp/η');
+  assert.ok(pw < 0.125 + 1e-9, 'power at half speed ≤ 1/8');
 });
 
 test('energy balance closes < 1 % across operating range', () => {

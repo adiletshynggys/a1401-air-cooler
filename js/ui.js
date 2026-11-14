@@ -8,6 +8,9 @@
     : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
   UI.esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  /** Green "measured" tag with a tooltip naming the source. */
+  UI.source = (label, txt) => `<span class="assume src" tabindex="0" data-tip="${UI.esc(txt)}">${UI.esc(label)}</span>`;
+
   /** "assumption" tag with a tooltip. `key` is a key of A1401.ASSUMPTIONS, or free text. */
   UI.assume = key => {
     const txt = (window.A1401 && A1401.ASSUMPTIONS[key]) || key;

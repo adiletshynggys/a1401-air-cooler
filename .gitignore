@@ -1,6 +1,8 @@
 # Plant data may be confidential: keep raw exports out of the public repo.
 data/*.csv
 data/*.tsv
+# public weather (METAR, Atyrau airport) is fine to publish
+!data/weather_uatg.csv
 *.tsv
 attachment.txt
 .claude/

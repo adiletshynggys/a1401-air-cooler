@@ -198,6 +198,13 @@
   }
   hook('dropPlant', 'filePlant', loadPlant);
   hook('dropWx', 'fileWx', loadWx);
+  // Bundled hourly weather (data/weather_uatg.js, built by tools/weather.js): used unless a file is loaded.
+  if (window.WEATHER_UATG) {
+    wx = window.WEATHER_UATG.map(([h, T]) => ({ t: h * HOUR, T }));
+    document.getElementById('dropWx').classList.add('loaded');
+    document.getElementById('wxStatus').textContent = `Built in: ${fmt(wx.length, 0)} hourly values, Atyrau airport METAR, Nov 2023 – Nov 2026. Drop a file to replace.`;
+    document.getElementById('cfNote').textContent = 'Weather is built in. Load the plant CSV to compute it (daily means, model inverted for UA).';
+  }
 
 
   window.Plant = { parseCSV, clean, load: loadPlant, loadWeather: loadWx };
