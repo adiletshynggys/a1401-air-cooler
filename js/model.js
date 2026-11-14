@@ -110,7 +110,7 @@
     fpi: 11, finT: 0.0004, finMaterial: 'Al',
     passes: 6,                    // assumption: one row per pass, gas enters the top row
     // --- fans (forced draft, underneath) --------------------------------
-    nFans: 6, fanD: 4.2, fanRpm: 250,  // assumption: sized to API 661 (≥ 40 % coverage, tip ≤ 60 m/s)
+    nFans: 1, fanD: 4.2, fanRpm: 250,  // one fan (team); size and speed assumed (no datasheet)
     psi0: 0.065,                  // shut-off static pressure coefficient Δp0/(ρ u_tip²)
     phi0: 0.28,                   // free-delivery flow coefficient Q0/(u_tip·D²)
     fanEff: 0.70, motorEff: 0.93,
@@ -129,6 +129,21 @@
     foulMode: 'uniform',          // 'bottom1' | 'bottom2' | 'uniform'
     uaMult: 1,                    // lumped multiplier, used only for plant-data inversion
     nSeg: 16,
+    // --- solution 1: rain/dust hood + outer cage + inlet filters ------------
+    hood: false,
+    hoodOutletRatio: 0.45,        // hood side outlet area / bundle face area
+    hoodK: 0.3,                   // smooth 90° turn with round fillet (r/D ≥ 1), on outlet velocity
+    cage: false,
+    cageK: 0.5,                   // wire mesh, ~70 % open, on bundle face velocity
+    filters: false,
+    filterDp: 80,                 // Pa at 2.5 m/s through the filter (coarse G4, mid-life)
+    filterAreaRatio: 1.5,         // filter area (fan sides + front) / bundle face area
+    // --- solution 2: standby cooler + water spray + lower inlet T ------------
+    spray: false,
+    sprayEff: 0.7,                // evaporative pre-cooling effectiveness (approach to wet bulb)
+    sprayMinT: 5,                 // spray off below this air temperature (freezing)
+    RH: 44,                       // relative humidity of ambient air, %
+    spare: false,                 // a second identical cooler on standby (visual + fouling level)
   };
 
   const ASSUMPTIONS = {
@@ -138,8 +153,15 @@
     finT: 'Typical rolled Al fin thickness; not on the drawing.',
     tubesPerBundle: 'Back-calculated: 226 m² bare / (π·0.025 m·10.5 m) = 274 tubes.',
     passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
-    nFans: 'Two fans per section, 6 in total (forced draft, 10.5 × 6 m bay of two bundles). Fan datasheet not available.',
-    fanD: 'No fan datasheet. Sized to API 661: 2 fans per 63 m² bay need ≥ 40 % coverage → Ø ≥ 4.0 m; 4.2 m is the next standard size. The earlier team estimate of ~2.4 m (14 % coverage) is within the slider range and changes the fitted fouling by only ~5 %.',
+    nFans: 'One forced-draft fan under the cooler (team information). Fan datasheet not available.',
+    fanD: 'No fan datasheet. 4.2 m assumed (a common large ACHE fan size).',
+    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet to a side outlet of 45 % of the face area; K = 0.3 for the turn plus one velocity head at the outlet.',
+    cage: 'Outer wire-mesh cage, ~70 % open: K = 0.5 velocity heads at bundle face velocity.',
+    filters: 'Coarse (G4) filter panels on the fan sides and in front of it, 1.5 × the bundle face area; 80 Pa at 2.5 m/s mid-life, Δp ∝ v^1.5.',
+    clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked, R_f = 0.02 m²K/W (assumption).',
+    spare: 'Two identical coolers, swapped for cleaning every ~6 months. The online unit is on average part-way through its fouling cycle: 12 % blocked, R_f = 0.08 m²K/W (assumption).',
+    spray: 'Water spray at the air inlet: air cooled toward the wet bulb with 70 % effectiveness; off below 5 °C (freezing). Humidity: UATG METAR means.',
+    TinFix: 'E-1408 restored to its 137 °C design outlet, so A-1401 gets 137 °C instead of ~167 °C.',
     fanRpm: 'No fan datasheet. 250 rpm gives a 55 m/s tip speed, below the API 661 limit of 60 m/s. Sets the fan curve via the affinity laws.',
     psi0: 'Generic axial-fan curve shape (shut-off pressure coefficient).',
     phi0: 'Generic axial-fan curve shape (free-delivery flow coefficient).',
@@ -286,7 +308,29 @@
     const coil = p.steamCoil ? rowDP(g, m, blk.coil, air) : 0;
     const vFan = Q / g.fanArea;
     const plenum = p.plenumK * 0.5 * air.rho * vFan * vFan;
-    return { total: bundle + coil + plenum, bundle, coil, plenum, rows };
+    const vFace = Q / g.Aface, qFace = 0.5 * air.rho * vFace * vFace;
+    // hood: turn loss + higher exit velocity at the smaller side outlet (the plenum K
+    // already holds one exit head at face velocity)
+    const vOut = vFace / p.hoodOutletRatio;
+    const hood = p.hood ? Math.max(0, (p.hoodK + 1) * 0.5 * air.rho * vOut * vOut - qFace) : 0;
+    const cage = p.cage ? p.cageK * qFace : 0;
+    const vFil = Q / (p.filterAreaRatio * g.Aface);
+    const filter = p.filters ? p.filterDp * Math.pow(vFil / 2.5, 1.5) : 0;
+    return { total: bundle + coil + plenum + hood + cage + filter, bundle, coil, plenum, hood, cage, filter, rows };
+  }
+
+  /** Wet-bulb temperature [°C] from dry bulb and RH [%] — Stull (2011), ±0.3 K. */
+  function wetBulb(T, RH) {
+    RH = Math.max(5, Math.min(99, RH));
+    return T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659)) + Math.atan(T + RH) - Math.atan(RH - 1.676331)
+      + 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH) - 4.686035;
+  }
+
+  /** Air temperature reaching the fan/bundle, after the optional water spray. */
+  function inletAir(p) {
+    if (!p.spray || p.Tamb < p.sprayMinT) return { T: p.Tamb, dT: 0 };
+    const T = p.Tamb - p.sprayEff * (p.Tamb - wetBulb(p.Tamb, p.RH));
+    return { T, dT: p.Tamb - T };
   }
 
   /** Intersection of fan curve and system curve (bisection on Q). */
@@ -395,7 +439,8 @@
   function solve(input) {
     const p = Object.assign({}, DEFAULTS, input || {});
     const g = geometry(p);
-    const air = airProps(p.Tamb, p.patm);
+    const ai = inletAir(p), Ta0 = ai.T;
+    const air = airProps(Ta0, p.patm);
     const blk = rowBlockage(p);
     const op = operatingPoint(p, g, air, blk);
     const mAir = op.Q * air.rho;
@@ -417,7 +462,7 @@
 
     // air temperature field entering each row (r) at column x
     const TaIn = [];
-    for (let r = 0; r < R; r++) TaIn.push(new Float64Array(N).fill(p.Tamb));
+    for (let r = 0; r < R; r++) TaIn.push(new Float64Array(N).fill(Ta0));
     const TaOut = TaIn.map(a => new Float64Array(a));
     const cellQ = TaIn.map(() => new Float64Array(N));
     const cellTg = TaIn.map(() => new Float64Array(N));
@@ -472,7 +517,7 @@
     const ref = gasDutyFine(p.Tin, gasOut.T, nd, nvIn, p.Pin, p.Pout, 400);
     let TairOut = 0;
     for (let x = 0; x < N; x++) TairOut += TaOut[R - 1][x] / N;
-    const QairCheck = mAir * CP_AIR * (TairOut - p.Tamb) / 1000;
+    const QairCheck = mAir * CP_AIR * (TairOut - Ta0) / 1000;
     let UAsum = 0, hMean = 0, etaMean = 0, hClean = 0;
     for (const ar of airRows) { hMean += ar.hEff / R; etaMean += ar.etaF / R; hClean += ar.h / R; }
     // overall UA from the clean/fouled cell conductances at mean conditions
@@ -485,7 +530,9 @@
     return {
       params: p, geom: g, air, blockage: blk,
       airflow: { Q: op.Q, m: mAir, faceV: op.Q / g.Aface, fanV: op.Q / g.fanArea, dp: op.dp, sys: op.sys, s: op.s,
-        powerShaft: shaft, powerElectric: shaft / p.motorEff, Tout: TairOut },
+        powerShaft: shaft, powerElectric: shaft / p.motorEff, Tout: TairOut, Tin: Ta0 },
+      // evaporated spray water [m³/h] = sensible cooling of the air / latent heat
+      sprayWater: ai.dT > 0 ? mAir * CP_AIR * ai.dT / (hfg(Ta0) * 1000) * 3.6 : 0,
       rows: rowsOut, airRows,
       hAir: hClean, hAirEff: hMean, finEff: etaMean,
       UA: UAsum, U: UAsum * 1000 / g.Ao,
@@ -509,7 +556,7 @@
   /** Fan curve (per total fans) and system curve sampled for plotting. */
   function curves(input, n) {
     const p = Object.assign({}, DEFAULTS, input || {});
-    const g = geometry(p), air = airProps(p.Tamb, p.patm), blk = rowBlockage(p);
+    const g = geometry(p), air = airProps(inletAir(p).T, p.patm), blk = rowBlockage(p);
     const fp = fanParams(p, air);
     const s = p.fanPct / 100;
     const Qmax = p.nFans * fp.Q0 * 1.05;
@@ -591,7 +638,54 @@
     return { fanScale: base.fanScale, blockage, points: out };
   }
 
+  /* ------------------------------------------------------------------ *
+   * 9. Weather cases and the solutions to compare
+   * ------------------------------------------------------------------ */
+  /* Air: UATG METAR means (tools/weather.js). Process: balance.py scenarios.
+   * Rf: today's fouling fitted (50 % blockage, uniform) to the plant outlet. */
+  const WEATHER = [
+    { key: 'winter', name: 'Winter', Tamb: -3.4, RH: 83, flow: 24119, Tin: 166.1, Rf: 0.371 },
+    { key: 'now', name: '14 Nov', Tamb: 7, RH: 87, flow: 20979, Tin: 166.9, Rf: 0.358 },
+    { key: 'summer', name: 'Summer', Tamb: 25.9, RH: 44, flow: 18122, Tin: 160.7, Rf: 0.434 },
+    { key: 'peak', name: 'Hot day', Tamb: 38, RH: 21, flow: 18122, Tin: 160.7, Rf: 0.434 },
+  ];
+  const SETPOINT = 65;   // TICA0055
+
+  const S1 = { hood: true, cage: true, filters: true, blockage: 0.03, Rf: 0.02 };
+  const S2 = { spare: true, spray: true, Tin: 137, blockage: 0.12, Rf: 0.08 };
+  const CASES = [
+    { key: 'normal', name: 'Normal', sub: 'today, fouled', set: w => ({ blockage: 0.5, Rf: w.Rf }) },
+    { key: 's1', name: 'Solution 1', sub: 'hood + cage + filters', set: () => S1 },
+    { key: 's2', name: 'Solution 2', sub: 'standby cooler + spray + 137 °C', set: () => S2 },
+    { key: 's12', name: '1 + 2', sub: 'all together', set: () => Object.assign({}, S2, S1) },
+  ];
+
+  /** Model input for a case in a weather, plus optional overrides. */
+  function caseParams(caseKey, weather, ov) {
+    const w = typeof weather === 'string' ? WEATHER.find(x => x.key === weather) : weather;
+    const c = CASES.find(x => x.key === caseKey);
+    return Object.assign({}, DEFAULTS, { Tamb: w.Tamb, RH: w.RH, flow: w.flow, Tin: w.Tin, foulMode: 'uniform' },
+      c.set(w), ov || {});
+  }
+
+  /** Fan controller TICA0055: the lowest fan output that reaches the setpoint, else 100 %. */
+  function autoFan(input, sp) {
+    sp = sp || SETPOINT;
+    // spray is used only when the fans alone cannot reach the setpoint
+    if (input.spray) {
+      const dry = solve(Object.assign({}, input, { spray: false, fanPct: 100 }));
+      if (dry.Tout <= sp) return autoFan(Object.assign({}, input, { spray: false, sprayIdle: true }), sp);
+    }
+    const at = f => solve(Object.assign({}, input, { fanPct: f }));
+    const full = at(100);
+    if (full.Tout > sp) return full;
+    let lo = 0, hi = 100;
+    for (let i = 0; i < 14; i++) { const m = 0.5 * (lo + hi); if (at(m).Tout > sp) lo = m; else hi = m; }
+    return at(hi);
+  }
+
   return {
+    WEATHER, CASES, SETPOINT, caseParams, autoFan, wetBulb, inletAir,
     TARGETS, calibrate,
     DEFAULTS, ASSUMPTIONS, DRY, MWD, CPD, CPV, MW_W, NM3_PER_KMOL, FIN_K,
     psat, hfg, wsat, airProps, gasProps,

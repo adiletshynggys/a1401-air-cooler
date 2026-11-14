@@ -48,7 +48,7 @@
   /* ---------- colour map (diverging blue → red, ColorBrewer RdYlBu reversed) ---------- */
   const STOPS = [[0x2c, 0x7b, 0xb6], [0xab, 0xd9, 0xe9], [0xff, 0xff, 0xbf], [0xfd, 0xae, 0x61], [0xd7, 0x19, 0x1c]];
   UI.cmap = t => {
-    t = Math.max(0, Math.min(1, t)) * (STOPS.length - 1);
+    t = (isFinite(t) ? Math.max(0, Math.min(1, t)) : 0) * (STOPS.length - 1);
     const i = Math.min(STOPS.length - 2, Math.floor(t)), f = t - i, a = STOPS[i], b = STOPS[i + 1];
     return [0, 1, 2].map(k => (a[k] + (b[k] - a[k]) * f) / 255);
   };
@@ -58,12 +58,12 @@
   const listeners = [];
   UI.onTab = fn => listeners.push(fn);
   function route() {
-    const name = (location.hash || '#overview').slice(1).split('?')[0];
+    const name = (location.hash || '#simulator').slice(1).split('?')[0];
     const tabs = document.querySelectorAll('section.tab');
     let found = false;
     tabs.forEach(s => { const on = s.dataset.tab === name; s.hidden = !on; found = found || on; });
-    if (!found) { document.getElementById('tab-overview').hidden = false; }
-    const active = found ? name : 'overview';
+    if (!found) { document.getElementById('tab-simulator').hidden = false; }
+    const active = found ? name : 'simulator';
     document.querySelectorAll('.tabs a').forEach(a => {
       const on = a.dataset.tab === active; a.classList.toggle('on', on); a.setAttribute('aria-selected', on);
     });

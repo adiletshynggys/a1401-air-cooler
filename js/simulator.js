@@ -1,267 +1,232 @@
-/* simulator.js — sliders, readouts, "why debris hurts twice" cards and charts (a)–(e). */
+/* simulator.js — case buttons (normal vs solutions), weather, 3D view, comparison table, charts. */
 (function () {
   'use strict';
   const M = window.A1401, { fmt, assume } = UI;
+  const kw = w => fmt(w / 1000, w < 9500 ? 1 : 0);
   UI.chartDefaults();
 
-  /* Fitted fouling from the calibration (blockage held at 50 %, uniform). The Validation
-   * tab recomputes these live; presets are refreshed when it finishes. */
-  const FIT = { blockage: 0.5, Rf_now: 0.408, Rf_summer: 0.480 };
-  const PRESETS = {
-    clean: { Tamb: 7, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: 0, Rf: 0, foulMode: 'uniform' },
-    now: { Tamb: 7, flow: 20979, Tin: 166.9, fanPct: 88.2, blockage: FIT.blockage, Rf: FIT.Rf_now, foulMode: 'uniform' },
-    summer: { Tamb: 25.9, flow: 18122, Tin: 160.7, fanPct: 99.4, blockage: FIT.blockage, Rf: FIT.Rf_summer, foulMode: 'uniform' },
-    design: { Tamb: 38, flow: 21000, Tin: 137, fanPct: 100, blockage: 0, Rf: 0, foulMode: 'uniform' },
+  const NOTE = {
+    normal: 'Today: 50 % of fin gaps blocked; debris resistance fitted to the plant outlet temperature for this weather.',
+    s1: [M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.filters, M.ASSUMPTIONS.clean].join(' '),
+    s2: [M.ASSUMPTIONS.spare, M.ASSUMPTIONS.spray, M.ASSUMPTIONS.TinFix].join(' '),
+    s12: 'Solution 1 and solution 2 together: protected bundle (hood, cage, filters), standby unit, spray and 137 °C inlet.',
   };
-  const D = M.DEFAULTS;
-  let P = Object.assign({}, D, PRESETS.now);
 
-  /* ---------------- control definitions ---------------- */
-  const finH = () => (P.finOD - P.finRootD) / 2;
-  const CTL = [
-    { grp: 'Operating point' },
-    { k: 'Tamb', label: 'Ambient air', min: -30, max: 45, step: 0.5, unit: '°C', d: 1 },
-    { k: 'flow', label: 'Syngas flow (dry)', min: 10000, max: 26000, step: 100, unit: 'Nm³/h', d: 0 },
-    { k: 'Tin', label: 'Inlet temperature', min: 130, max: 175, step: 0.5, unit: '°C', d: 1, help: 'Design 137 °C, actual ~167 °C (TIA050)' },
-    { k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0, help: 'Treated as fan speed (affinity laws)', tag: 'Fan output % is treated as speed; with auto-variable-pitch fans the curve shape differs.' },
-    { grp: 'Debris fouling' },
-    { k: 'blockage', label: 'Fin gaps blocked', min: 0, max: 70, step: 1, unit: '%', d: 0, scale: 100, help: 'Packed gaps resist the air and bury the fin surface' },
-    { k: 'Rf', label: 'Debris resistance R_f', min: 0, max: 1, step: 0.005, unit: 'm²K/W', d: 3, help: 'Insulating layer on the finned surface' },
-    { k: 'foulMode', label: 'Which rows are fouled', type: 'seg', opts: [['bottom1', 'Bottom row'], ['bottom2', 'Bottom 2'], ['uniform', 'All rows']] },
-    { k: 'steamCoil', label: 'Steam heating coil on air inlet', type: 'chk', tag: 'steamCoil' },
-    { grp: 'Fins' },
-    { k: 'fpi', label: 'Fin density', min: 6, max: 14, step: 0.5, unit: 'fins/inch', d: 1, tag: 'fpi' },
-    { k: '_finH', label: 'Fin height', min: 8, max: 20, step: 0.1, unit: 'mm', d: 1, get: () => finH() * 1000, set: v => { P.finOD = P.finRootD + 2 * v / 1000; }, tag: 'finOD' },
-    { k: '_finT', label: 'Fin thickness', min: 0.25, max: 0.6, step: 0.01, unit: 'mm', d: 2, get: () => P.finT * 1000, set: v => { P.finT = v / 1000; }, tag: 'finT' },
-    { k: 'finMaterial', label: 'Fin material', type: 'seg', opts: [['Al', 'Aluminium'], ['steel', 'Steel']] },
-    { grp: 'Fans and tube side', collapsed: true },
-    { k: 'nFans', label: 'Number of fans', min: 3, max: 12, step: 1, unit: '', d: 0, tag: 'nFans' },
-    { k: 'fanD', label: 'Fan diameter', min: 1.8, max: 4.3, step: 0.05, unit: 'm', d: 2, tag: 'fanD' },
-    { k: 'fanRpm', label: 'Fan speed at 100 %', min: 250, max: 700, step: 5, unit: 'rpm', d: 0, tag: 'fanRpm' },
-    { k: 'fanScale', label: 'Fan scaling (calibration)', min: 0.3, max: 1.5, step: 0.01, unit: '×', d: 2, tag: 'Calibration factor on fan size. Held at 1: the data contain no airflow or fan-power measurement to fit it.' },
-    { k: 'hFilm', label: 'Condensate film h', min: 1500, max: 3000, step: 50, unit: 'W/m²K', d: 0, tag: 'hFilm' },
-    { k: 'passes', label: 'Tube passes', type: 'seg', opts: [[1, '1'], [2, '2'], [3, '3'], [6, '6']], tag: 'passes' },
-  ];
+  /* ---------------- state ---------------- */
+  const st = { c: 'normal', w: 'summer', glob: {}, per: {} };
+  M.CASES.forEach(c => { st.per[c.key] = { fanMode: 'auto', fanPct: 100 }; });
+  const W = () => M.WEATHER.find(w => w.key === st.w);
 
-  /* ---------------- build controls ---------------- */
-  const host = document.getElementById('sliders');
-  let html = '', open = false, inDetails = false;
-  for (const c of CTL) {
-    if (c.grp) {
-      if (inDetails) html += '</details>';
-      else if (open) html += '</div>';
-      if (c.collapsed) { html += `<details class="grp"><summary>${c.grp}</summary>`; inDetails = true; }
-      else { html += `<div class="grp"><h3>${c.grp}</h3>`; open = true; inDetails = false; }
-      continue;
-    }
-    const tag = c.tag ? ' ' + assume(c.tag) : '';
-    if (c.type === 'seg') {
-      html += `<div class="ctl"><label>${c.label}${tag}</label><div class="seg" data-k="${c.k}">` +
-        c.opts.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join('') + '</div></div>';
-    } else if (c.type === 'chk') {
-      html += `<label class="chk"><input type="checkbox" data-k="${c.k}"> ${c.label}${tag}</label>`;
-    } else {
-      html += `<div class="ctl"><div class="row"><label for="s-${c.k}">${c.label}${tag}</label><output id="o-${c.k}"></output></div>` +
-        `<input type="range" id="s-${c.k}" data-k="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}">` +
-        (c.help ? `<div class="help">${c.help}</div>` : '') + '</div>';
-    }
+  function input(key, extra) {
+    const o = Object.assign({}, st.per[key]); delete o.fanMode;
+    if (st.per[key].fanMode === 'auto') delete o.fanPct;
+    return M.caseParams(key, W(), Object.assign({}, st.glob, o, extra || {}));
   }
-  html += inDetails ? '</details>' : '</div>';
-  host.innerHTML = html;
+  function run(key, nSeg) {
+    const p = input(key, { nSeg });
+    return st.per[key].fanMode === 'manual' ? M.solve(p) : M.autoFan(p);
+  }
 
-  const ctlByK = Object.fromEntries(CTL.filter(c => c.k).map(c => [c.k, c]));
-  const getV = c => c.get ? c.get() : (P[c.k] * (c.scale || 1));
-  const setV = (c, v) => { if (c.set) c.set(v); else P[c.k] = v / (c.scale || 1); };
+  /* ---------------- buttons ---------------- */
+  const caseBtns = document.getElementById('caseBtns'), wxBtns = document.getElementById('wxBtns');
+  caseBtns.innerHTML = M.CASES.map(c => `<button type="button" data-c="${c.key}"><b>${c.name}</b><span>${c.sub}</span></button>`).join('');
+  wxBtns.innerHTML = M.WEATHER.map(w => `<button type="button" data-w="${w.key}" title="${fmt(w.Tamb, 1)} °C air">${w.name}</button>`).join('');
+  caseBtns.addEventListener('click', e => { const b = e.target.closest('button'); if (b) selectCase(b.dataset.c); });
+  wxBtns.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    st.w = b.dataset.w; delete st.glob.Tamb; delete st.glob.RH; delete st.glob.flow;
+    update(true);
+  });
+  function selectCase(k) { st.c = k; buildSliders(); update(false); }
+  function syncButtons() {
+    caseBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.c === st.c));
+    wxBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.w === st.w && st.glob.Tamb === undefined));
+  }
 
-  function syncControls() {
-    for (const c of CTL) {
-      if (!c.k) continue;
-      if (c.type === 'seg') host.querySelectorAll(`.seg[data-k="${c.k}"] button`).forEach(b => b.classList.toggle('on', String(P[c.k]) === b.dataset.v));
-      else if (c.type === 'chk') host.querySelector(`input[data-k="${c.k}"]`).checked = !!P[c.k];
-      else { const v = getV(c); host.querySelector('#s-' + c.k).value = v; host.querySelector('#o-' + c.k).textContent = `${fmt(v, c.d)} ${c.unit}`; }
+  /* ---------------- full screen ---------------- */
+  const stage = document.getElementById('stage');
+  // The stage always expands to the window (class "fs"); native full screen is added where allowed.
+  const fsBtn = document.getElementById('fsBtn');
+  function setFs(on) {
+    stage.classList.toggle('fs', on);
+    document.body.style.overflow = on ? 'hidden' : '';
+    fsBtn.title = on ? 'Exit full screen (Esc)' : 'Full screen (F)';
+    if (on && stage.requestFullscreen && !document.fullscreenElement) stage.requestFullscreen().catch(() => {});
+    if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  const toggleFs = () => setFs(!stage.classList.contains('fs'));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage.classList.contains('fs')) setFs(false); });
+  fsBtn.addEventListener('click', toggleFs);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && stage.classList.contains('fs')) setFs(false);
+    if ((e.key === 'f' || e.key === 'F') && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !document.getElementById('tab-simulator').hidden) toggleFs();
+  });
+
+  /* ---------------- sliders ---------------- */
+  const host = document.getElementById('sliders');
+  const P = () => input(st.c);
+  const GLOB = [
+    { k: 'Tamb', label: 'Air temperature', min: -20, max: 45, step: 0.5, unit: '°C', d: 1 },
+    { k: 'RH', label: 'Relative humidity', min: 10, max: 100, step: 1, unit: '%', d: 0 },
+    { k: 'flow', label: 'Syngas flow (dry)', min: 10000, max: 26000, step: 100, unit: 'Nm³/h', d: 0 },
+  ];
+  const FAN = [
+    { k: 'nFans', label: 'Number of fans', min: 1, max: 6, step: 1, unit: '', d: 0, tag: 'nFans' },
+    { k: 'fanD', label: 'Fan diameter', min: 2, max: 6, step: 0.1, unit: 'm', d: 1, tag: 'fanD' },
+    { k: 'fanRpm', label: 'Fan speed at 100 %', min: 120, max: 500, step: 5, unit: 'rpm', d: 0, tag: 'fanRpm' },
+  ];
+  function caseCtl() {
+    const p = P(), out = [
+      { k: 'Tin', label: 'Inlet temperature', min: 130, max: 175, step: 0.5, unit: '°C', d: 1 },
+      { k: 'blockage', label: 'Fin gaps blocked', min: 0, max: 70, step: 1, unit: '%', d: 0, scale: 100 },
+      { k: 'Rf', label: 'Debris resistance R_f', min: 0, max: 1, step: 0.005, unit: 'm²K/W', d: 3 },
+      { k: 'fanMode', label: 'Fan control', type: 'seg', opts: [['auto', 'Auto to 65 °C'], ['manual', 'Manual']] },
+    ];
+    if (st.per[st.c].fanMode === 'manual') out.push({ k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0 });
+    if (p.filters) out.push({ k: 'filterDp', label: 'Filter Δp at 2.5 m/s', min: 30, max: 250, step: 5, unit: 'Pa', d: 0, tag: 'filters' });
+    if (p.spray) out.push({ k: 'sprayEff', label: 'Spray effectiveness', min: 0.3, max: 0.95, step: 0.01, unit: '', d: 2, tag: 'spray' });
+    return out;
+  }
+  const ctlHtml = (c, scope) => c.type === 'seg'
+    ? `<div class="ctl"><label>${c.label}</label><div class="seg" data-k="${c.k}" data-s="${scope}">` +
+      c.opts.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join('') + '</div></div>'
+    : `<div class="ctl"><div class="row"><label for="s-${c.k}">${c.label}${c.tag ? ' ' + assume(c.tag) : ''}</label><output id="o-${c.k}"></output></div>` +
+      `<input type="range" id="s-${c.k}" data-k="${c.k}" data-s="${scope}" min="${c.min}" max="${c.max}" step="${c.step}"></div>`;
+  let CTLS = [];
+  function buildSliders() {
+    const cc = caseCtl();
+    CTLS = [...GLOB.map(c => Object.assign({ s: 'g' }, c)), ...cc.map(c => Object.assign({ s: 'c' }, c)), ...FAN.map(c => Object.assign({ s: 'g' }, c))];
+    const name = M.CASES.find(c => c.key === st.c).name;
+    host.innerHTML =
+      `<div class="grp"><h3>Weather and process · all cases</h3>${GLOB.map(c => ctlHtml(c, 'g')).join('')}</div>` +
+      `<div class="grp"><h3>${name}</h3>${cc.map(c => ctlHtml(c, 'c')).join('')}</div>` +
+      `<div class="grp"><h3>Fan · all cases</h3>${FAN.map(c => ctlHtml(c, 'g')).join('')}</div>`;
+    syncSliders();
+  }
+  function syncSliders() {
+    const p = P();
+    for (const c of CTLS) {
+      if (c.type === 'seg') { host.querySelectorAll(`.seg[data-k="${c.k}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === st.per[st.c][c.k])); continue; }
+      const v = (c.k === 'fanPct' ? st.per[st.c].fanPct : p[c.k]) * (c.scale || 1);
+      const el = host.querySelector('#s-' + c.k); if (!el) continue;
+      el.value = v; host.querySelector('#o-' + c.k).textContent = `${fmt(v, c.d)} ${c.unit}`;
     }
   }
   host.addEventListener('input', e => {
     const k = e.target.dataset.k; if (!k) return;
-    const c = ctlByK[k];
-    if (c.type === 'chk') P[k] = e.target.checked; else setV(c, parseFloat(e.target.value));
-    if (c.type !== 'chk') host.querySelector('#o-' + k).textContent = `${fmt(getV(c), c.d)} ${c.unit}`;
-    clearPreset(); update();
+    const c = CTLS.find(x => x.k === k), v = parseFloat(e.target.value) / (c.scale || 1);
+    (c.s === 'g' ? st.glob : st.per[st.c])[k] = v;
+    host.querySelector('#o-' + k).textContent = `${fmt(v * (c.scale || 1), c.d)} ${c.unit}`;
+    update(c.s === 'g');
   });
   host.addEventListener('click', e => {
     const b = e.target.closest('.seg button'); if (!b) return;
-    const k = b.parentElement.dataset.k;
-    P[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v;
-    syncControls(); clearPreset(); update();
+    st.per[st.c][b.parentElement.dataset.k] = b.dataset.v;
+    buildSliders(); update(false);
   });
-  const presetBtns = document.querySelectorAll('.presets button');
-  function clearPreset() { presetBtns.forEach(b => b.classList.remove('on')); }
-  presetBtns.forEach(b => b.addEventListener('click', () => {
-    Object.assign(P, PRESETS[b.dataset.preset]);
-    presetBtns.forEach(x => x.classList.toggle('on', x === b));
-    syncControls(); update();
-  }));
 
-  /* ---------------- readouts ---------------- */
-  const ro = document.getElementById('readouts');
-  function renderReadouts(r) {
-    const a = r.airflow, q = r.Q / 1000;
-    const row = (k, v, u, tag) => `<tr><td>${k}${tag ? ' ' + assume(tag) : ''}</td><td class="n">${v} <small>${u}</small></td></tr>`;
-    const latPct = r.Q > 0 ? 100 * r.Ql / r.Q : 0;
-    ro.innerHTML = `
-      <div><h3>Gas outlet</h3>
-      <div class="big">${fmt(r.Tout, 1)}<small> °C</small></div>
-      <table>${row('Duty', fmt(q, 2), 'MW')}
-      ${row('Water condensed', fmt(r.condensed, 0), 'kg/h')}
-      ${row('Water vapour in', fmt(r.waterIn, 0), 'kg/h')}</table>
-      <div class="split"><div class="lat" style="width:${latPct}%"></div><div class="sen" style="width:${100 - latPct}%"></div></div>
-      <div class="split-lbl"><span>latent ${fmt(r.Ql / 1000, 2)} MW</span><span>sensible ${fmt(r.Qs / 1000, 2)} MW</span></div></div>
-      <div><h3>Air side</h3><table>
-      ${row('Air mass flow', fmt(a.m, 0), 'kg/s')}
-      ${row('Face velocity', fmt(a.faceV, 2), 'm/s')}
-      ${row('Fan static pressure', fmt(a.dp, 0), 'Pa')}
-      ${row('Fan power, shaft', fmt(a.powerShaft / 1000, 0), 'kW', 'fanEff')}
-      ${row('Air outlet', fmt(a.Tout, 1), '°C')}
-      ${row('Air-side h, clean fins', fmt(r.hAir, 1), 'W/m²K')}
-      ${row('Air-side h with R_f', fmt(r.hAirEff, 1), 'W/m²K')}
-      ${row('Fin efficiency', fmt(100 * r.finEff, 1), '%')}</table></div>
-      <div><h3>Overall</h3><table>
-      ${row('U (finned area)', fmt(r.U, 2), 'W/m²K')}
-      ${row('UA', fmt(r.UA, 1), 'kW/K')}
-      ${row('Finned area', fmt(r.geom.Ao, 0), 'm²')}
-      ${row('Fin ratio', fmt(r.geom.finRatio, 1), '')}
-      ${row('Energy balance closure', fmt(100 * r.closure, 2), '%')}</table></div>`;
-    const b = document.getElementById('spBadge');
-    b.className = 'badge ' + (r.setpointMet ? 'ok' : 'bad');
-    b.textContent = r.setpointMet ? `65 °C setpoint met · ${fmt(r.Tout, 1)} °C` : `Setpoint 65 °C missed by ${fmt(r.Tout - 65, 1)} K`;
+  /* ---------------- card + table ---------------- */
+  const card = document.getElementById('card'), cmp = document.getElementById('cmp');
+  const dl = (v, ref, d, unit, lowerIsBetter) => {
+    const x = v - ref; if (Math.abs(x) < Math.pow(10, -d) / 2) return '';
+    const good = lowerIsBetter ? x < 0 : x > 0;
+    return `<span class="dlt ${good ? 'good' : 'worse'}">${x > 0 ? '+' : '−'}${fmt(Math.abs(x), d)}${unit}</span>`;
+  };
+  function renderCard(r, base) {
+    const c = M.CASES.find(x => x.key === st.c), isN = st.c === 'normal', ok = r.Tout <= M.SETPOINT + 0.5;
+    const row = (k, v, u, d) => `<tr><td>${k}</td><td class="n">${v} <small>${u}</small>${d || ''}</td></tr>`;
+    card.innerHTML = `
+      <h3>${c.name} ${assume(NOTE[c.key])}</h3><div class="cs">${c.sub} · ${W().name}${st.glob.Tamb !== undefined ? ' (custom)' : ''}, ${fmt(r.params.Tamb, 1)} °C air</div>
+      <div class="tout">${fmt(r.Tout, 1)}<small> °C out</small></div>
+      <span class="sp ${ok ? 'ok' : 'bad'}">${ok ? '65 °C setpoint met' : `${fmt(r.Tout - M.SETPOINT, 1)} K above 65 °C`}</span>
+      <table>
+        ${isN ? '' : row('vs normal', fmt(r.Tout, 1), '°C', dl(r.Tout, base.Tout, 1, ' K', true))}
+        ${row('Fan output', fmt(r.params.fanPct, 0), '%', isN ? '' : dl(r.params.fanPct, base.params.fanPct, 0, ' %', true))}
+        ${row('Fan power', kw(r.airflow.powerElectric), 'kW', isN ? '' : dl(r.airflow.powerElectric / 1000, base.airflow.powerElectric / 1000, 0, ' kW', true))}
+        ${row('Duty', fmt(r.Q / 1000, 2), 'MW')}
+        ${row('Water condensed', fmt(r.condensed / 1000, 2), 't/h')}
+        ${row('Air flow', fmt(r.airflow.Q, 0), 'm³/s')}
+        ${r.params.spray || r.params.sprayIdle ? row('Spray', r.sprayWater > 0 ? fmt(r.sprayWater, 2) : 'off', r.sprayWater > 0 ? `m³/h · air ${fmt(r.airflow.Tin, 1)} °C` : '(not needed)') : ''}
+      </table>`;
   }
-
-  /* ---------------- "debris hurts twice" ---------------- */
-  function renderTwice(r) {
-    const el = document.getElementById('twice');
-    const clean = M.solve(Object.assign({}, P, { blockage: 0, Rf: 0, nSeg: 10 }));
-    const g = r.geom, air = r.air;
-    // split the air-side loss: same airflow, fouled surfaces vs clean surfaces
-    let surf = 0, flowOnly = 0, base = 0;
-    for (let i = 0; i < P.rows; i++) {
-      base += M.airRow(g, P, clean.airflow.m, 0, air, 0).UAm;
-      surf += M.airRow(g, P, clean.airflow.m, r.blockage.rows[i], air, r.blockage.fouled[i]).UAm;
-      flowOnly += M.airRow(g, P, r.airflow.m, 0, air, 0).UAm;
-    }
-    const fouled = P.blockage > 0 || P.Rf > 0;
-    const full = M.solve(Object.assign({}, P, { fanPct: 100, nSeg: 10 }));
-    const dFlow = 100 * (1 - r.airflow.Q / Math.max(clean.airflow.Q, 1e-9));
-    const dSurf = 100 * (1 - surf / base), dFlowH = 100 * (1 - flowOnly / base);
-    el.innerHTML = fouled ? `
-      <div class="card"><div class="h">1 · It resists the air</div><div class="big">−${fmt(dFlow, 0)} % air</div>
-        <p>Same fans, ${fmt(r.airflow.Q, 0)} instead of ${fmt(clean.airflow.Q, 0)} m³/s. Less air alone costs ${fmt(dFlowH, 0)} % of the air-side conductance (h ∝ v<sup>0.68</sup>).</p></div>
-      <div class="card"><div class="h">2 · It insulates the fins</div><div class="big">−${fmt(dSurf, 0)} % conductance</div>
-        <p>At the same airflow, buried fin area and the debris layer remove ${fmt(dSurf, 0)} % of the air-side conductance. Together: UA ${fmt(clean.UA, 0)} → ${fmt(r.UA, 0)} kW/K.</p></div>
-      <div class="card"><div class="h">3 · Fans cannot win it back</div><div class="big">${fmt(full.Tout, 1)} °C at 100 %</div>
-        <p>Clean bundle at ${fmt(P.fanPct, 0)} % fans: ${fmt(clean.Tout, 1)} °C. Fouled at 100 %: ${fmt(full.Tout, 1)} °C for ${fmt(full.airflow.powerShaft / 1000, 0)} kW of shaft power.</p></div>`
-      : `<div class="card" style="grid-column:1/-1"><div class="h">Clean bundle</div><p>Move the blockage or R<sub>f</sub> slider to see how debris cuts the airflow and insulates the fins at the same time.</p></div>`;
+  function renderTable(res) {
+    const maxP = Math.max(1, ...res.map(x => x.r.airflow.powerElectric));
+    cmp.innerHTML = `<thead><tr><th>Case · ${W().name}${st.glob.Tamb !== undefined ? ' (custom)' : ''}</th><th>Outlet</th><th>Setpoint 65 °C</th><th>Fan output</th><th>Fan power</th><th>Duty</th><th>Condensed</th><th>Spray water</th></tr></thead><tbody>` +
+      res.map(({ c, r }) => `<tr data-c="${c.key}" class="${c.key === st.c ? 'on' : ''}">
+        <td><b>${c.name}</b><span class="cs">${c.sub}</span></td>
+        <td>${fmt(r.Tout, 1)} °C</td>
+        <td class="${r.Tout <= M.SETPOINT + 0.5 ? 'ok' : 'bad'}">${r.Tout <= M.SETPOINT + 0.5 ? 'met' : '+' + fmt(r.Tout - M.SETPOINT, 1) + ' K'}</td>
+        <td>${fmt(r.params.fanPct, 0)} %</td>
+        <td><span class="bar" style="width:${Math.round(60 * r.airflow.powerElectric / maxP)}px"></span>${kw(r.airflow.powerElectric)} kW</td>
+        <td>${fmt(r.Q / 1000, 2)} MW</td>
+        <td>${fmt(r.condensed / 1000, 2)} t/h</td>
+        <td>${r.sprayWater > 0 ? fmt(r.sprayWater, 2) + ' m³/h' : '—'}</td></tr>`).join('') + '</tbody>';
   }
+  cmp.addEventListener('click', e => { const tr = e.target.closest('tr[data-c]'); if (tr) selectCase(tr.dataset.c); });
 
-  /* ---------------- charts ---------------- */
+  /* ---------------- charts: sweep of air temperature ---------------- */
   const charts = {};
-  const mk = (id, cfg) => { if (!window.Chart) return null; const c = new Chart(document.getElementById(id), cfg); charts[id] = c; return c; };
-  const axis = (title, extra) => Object.assign({ title: { display: true, text: title }, grid: { color: '#eef1f4' } }, extra || {});
-  const C = UI.SERIES;
-
+  const C = { normal: '#b3261e', s1: UI.SERIES[0], s2: UI.SERIES[2], s12: UI.SERIES[3] };
+  const TS = [-15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40];
+  // typical Atyrau humidity vs air temperature (UATG means: 85 % in winter, 44 % summer mean, 21 % above 35 °C)
+  const rhAt = T => T <= 7 ? 85 : T <= 26 ? 85 - (T - 7) * (41 / 19) : Math.max(15, 44 - (T - 26) * (23 / 12));
   function initCharts() {
-    mk('chFan', { type: 'scatter', data: { datasets: [] }, options: {
-      showLine: true, scales: { x: axis('Air flow, m³/s', { min: 0 }), y: axis('Static pressure, Pa', { min: 0 }) },
-      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.x, 0)} m³/s, ${fmt(c.parsed.y, 0)} Pa` } } } } });
-    mk('chBlock', { type: 'scatter', data: { datasets: [] }, options: {
-      showLine: true, scales: { x: axis('Fin gaps blocked, %', { min: 0, max: 70 }), y: axis('Outlet T, °C'), y2: axis('Duty, MW', { position: 'right', grid: { display: false } }) },
-      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y, c.dataset.yAxisID === 'y2' ? 2 : 1)}` } } } } });
-    mk('chRows', { type: 'bar', data: { labels: [], datasets: [] }, options: {
-      scales: { x: { grid: { display: false } }, y: axis('Row duty, MW', { min: 0 }), y2: axis('Gas T leaving the row, °C', { position: 'right', grid: { display: false } }) } } });
-    mk('chPower', { type: 'scatter', data: { datasets: [] }, options: {
-      showLine: true, scales: { x: axis('Fan shaft power, kW', { min: 0 }), y: axis('Duty, MW', { min: 0 }) },
-      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.raw.f, 0)} % fans → ${fmt(c.parsed.x, 0)} kW, ${fmt(c.parsed.y, 2)} MW, outlet ${fmt(c.raw.T, 1)} °C` } } } } });
-    mk('chInlet', { type: 'scatter', data: { datasets: [] }, options: {
-      showLine: true, scales: { x: axis('A-1401 inlet temperature, °C', { min: 130, max: 175 }), y: axis('Outlet T, °C'), y2: axis('Duty, MW · water condensed, t/h', { position: 'right', grid: { display: false }, min: 0 }) },
-      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y, 2)}` } } } } });
-  }
-
-  function updateCharts(r) {
     if (!window.Chart) return;
-    const q = Object.assign({}, P, { nSeg: 8 });
-    // (a) fan vs system
-    const cf = M.curves(q, 50), cc = M.curves(Object.assign({}, q, { blockage: 0, Rf: 0 }), 50);
-    const xy = (pts, k) => pts.map(p => ({ x: p.Q, y: p[k] }));
-    charts.chFan.data.datasets = [
-      { label: `Fan curve at ${fmt(P.fanPct, 0)} %`, data: xy(cf.pts, 'fan'), borderColor: C[0] },
-      { label: 'Fan curve at 100 %', data: xy(cf.pts, 'fan100'), borderColor: C[0], borderDash: [5, 4], borderWidth: 1.5 },
-      { label: 'System, clean', data: xy(cc.pts, 'sys'), borderColor: UI.GREY },
-      { label: 'System, fouled', data: xy(cf.pts, 'sys'), borderColor: C[1] },
-      { label: 'Operating points', data: [{ x: cc.op.Q, y: cc.op.dp }, { x: cf.op.Q, y: cf.op.dp }], showLine: false, pointRadius: 5, backgroundColor: [UI.GREY, C[1]], borderColor: '#fff' },
-    ];
-    const ymax = Math.max(...cf.pts.map(p => p.fan100)) * 1.15;
-    charts.chFan.options.scales.y.max = Math.ceil(ymax / 50) * 50;
-    charts.chFan.update();
-
-    // (b) blockage sweep at 0/20/35 °C
-    const ds = [];
-    [0, 20, 35].forEach((Ta, i) => {
-      const T = [], Q = [];
-      for (let b = 0; b <= 70; b += 5) {
-        const s = M.solve(Object.assign({}, q, { Tamb: Ta, blockage: b / 100 }));
-        T.push({ x: b, y: s.Tout }); Q.push({ x: b, y: s.Q / 1000 });
+    const ax = (t, o) => Object.assign({ title: { display: true, text: t }, grid: { color: '#eef1f4' } }, o || {});
+    const opt = y => ({ showLine: true, scales: { x: ax('Air temperature, °C', { min: -15, max: 40 }), y: ax(y) },
+      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y, 1)}` } } } });
+    charts.out = new Chart(document.getElementById('chOut'), { type: 'scatter', data: { datasets: [] }, options: opt('Gas outlet, °C') });
+    charts.pow = new Chart(document.getElementById('chPow'), { type: 'scatter', data: { datasets: [] }, options: opt('Fan power, kW') });
+    charts.pow.options.scales.y.min = 0;
+  }
+  let job = 0;
+  function sweep() {
+    if (!window.Chart) return;
+    const my = ++job, data = {};
+    M.CASES.forEach(c => { data[c.key] = { out: [], pow: [] }; });
+    const tasks = [];
+    for (const T of TS) for (const c of M.CASES) tasks.push({ T, c });
+    let i = 0;
+    (function step() {
+      if (my !== job) return;
+      const t0 = performance.now();
+      while (i < tasks.length && performance.now() - t0 < 30) {
+        const { T, c } = tasks[i++];
+        const glob = Object.assign({}, st.glob, { Tamb: T, RH: rhAt(T) });
+        const o = Object.assign({}, st.per[c.key]); delete o.fanMode; if (st.per[c.key].fanMode === 'auto') delete o.fanPct;
+        const p = M.caseParams(c.key, W(), Object.assign(glob, o, { nSeg: 8 }));
+        const r = st.per[c.key].fanMode === 'manual' ? M.solve(p) : M.autoFan(p);
+        data[c.key].out.push({ x: T, y: r.Tout }); data[c.key].pow.push({ x: T, y: r.airflow.powerElectric / 1000 });
       }
-      ds.push({ label: `Outlet T, ${Ta} °C air`, data: T, borderColor: C[i], yAxisID: 'y' });
-      ds.push({ label: `Duty, ${Ta} °C air`, data: Q, borderColor: C[i], borderDash: [5, 4], borderWidth: 1.5, yAxisID: 'y2' });
-    });
-    ds.push({ label: '65 °C setpoint', data: [{ x: 0, y: 65 }, { x: 70, y: 65 }], borderColor: '#b3261e', borderWidth: 1, borderDash: [2, 3], yAxisID: 'y' });
-    charts.chBlock.data.datasets = ds; charts.chBlock.update();
-
-    // (c) rows in gas-path order (top → bottom)
-    const order = r.rows.slice().reverse();
-    charts.chRows.data.labels = order.map(o => `Row ${o.row + 1}` + (o.row === P.rows - 1 ? ' · gas in' : o.row === 0 ? ' · air in' : ''));
-    charts.chRows.data.datasets = [
-      { type: 'bar', label: 'Latent duty', data: order.map(o => o.Ql / 1000), backgroundColor: C[0], stack: 'q', yAxisID: 'y' },
-      { type: 'bar', label: 'Sensible duty', data: order.map(o => (o.Q - o.Ql) / 1000), backgroundColor: '#9cc3e8', stack: 'q', yAxisID: 'y' },
-      { type: 'line', label: 'Gas T leaving row', data: order.map(o => o.TgOut), borderColor: C[1], pointRadius: 3, pointBackgroundColor: C[1], yAxisID: 'y2' },
-    ];
-    charts.chRows.options.scales.x.stacked = true; charts.chRows.options.scales.y.stacked = true;
-    charts.chRows.update();
-
-    // (d) duty vs fan power, clean vs fouled
-    const sweep = o => { const out = []; for (let f = 20; f <= 100; f += 10) { const s = M.solve(Object.assign({}, q, o, { fanPct: f })); out.push({ x: s.airflow.powerShaft / 1000, y: s.Q / 1000, f, T: s.Tout }); } return out; };
-    charts.chPower.data.datasets = [
-      { label: 'Clean bundle', data: sweep({ blockage: 0, Rf: 0 }), borderColor: UI.GREY, pointRadius: 3, pointBackgroundColor: UI.GREY },
-      { label: `Fouled (${fmt(P.blockage * 100, 0)} % blocked, R_f ${fmt(P.Rf, 2)})`, data: sweep({}), borderColor: C[1], pointRadius: 3, pointBackgroundColor: C[1] },
-    ];
-    charts.chPower.update();
-
-    // (e) inlet temperature
-    const T = [], Q = [], Z = [];
-    for (let t = 130; t <= 175; t += 2.5) {
-      const s = M.solve(Object.assign({}, q, { Tin: t }));
-      T.push({ x: t, y: s.Tout }); Q.push({ x: t, y: s.Q / 1000 }); Z.push({ x: t, y: s.condensed / 1000 });
-    }
-    const at = t => M.solve(Object.assign({}, q, { Tin: t }));
-    const a137 = at(137), a167 = at(167);
-    charts.chInlet.data.datasets = [
-      { label: 'Outlet T, °C', data: T, borderColor: C[0], yAxisID: 'y' },
-      { label: 'Duty, MW', data: Q, borderColor: C[1], yAxisID: 'y2' },
-      { label: 'Water condensed, t/h', data: Z, borderColor: C[2], borderDash: [5, 4], yAxisID: 'y2' },
-      { label: `Design 137 °C: ${fmt(a137.Q / 1000, 2)} MW, outlet ${fmt(a137.Tout, 1)} °C`, data: [{ x: 137, y: a137.Tout }], pointRadius: 6, pointStyle: 'rectRot', backgroundColor: UI.GREY, yAxisID: 'y' },
-      { label: `Actual 167 °C: ${fmt(a167.Q / 1000, 2)} MW, outlet ${fmt(a167.Tout, 1)} °C`, data: [{ x: 167, y: a167.Tout }], pointRadius: 6, pointStyle: 'rectRot', backgroundColor: '#b3261e', yAxisID: 'y' },
-    ];
-    charts.chInlet.update();
+      if (i < tasks.length) return setTimeout(step, 0);
+      const ds = k => M.CASES.map(c => ({ label: c.name, data: data[c.key][k], borderColor: C[c.key],
+        borderWidth: c.key === st.c ? 3 : 1.6, pointRadius: c.key === st.c ? 2.5 : 0, pointBackgroundColor: C[c.key] }));
+      const Ta = st.glob.Tamb !== undefined ? st.glob.Tamb : W().Tamb;
+      const now = { label: 'This weather', data: [{ x: Ta, y: 0 }], borderColor: '#9aa5b1', borderDash: [3, 3], borderWidth: 1 };
+      charts.out.data.datasets = [...ds('out'), { label: '65 °C setpoint', data: [{ x: -15, y: 65 }, { x: 40, y: 65 }], borderColor: '#17202a', borderDash: [4, 4], borderWidth: 1 }];
+      const top = Math.max(...charts.out.data.datasets.flatMap(d => d.data.map(p => p.y)));
+      charts.out.data.datasets.push(Object.assign({}, now, { data: [{ x: Ta, y: 0 }, { x: Ta, y: top }] }));
+      charts.out.update();
+      charts.pow.data.datasets = ds('pow');
+      const ptop = Math.max(1, ...charts.pow.data.datasets.flatMap(d => d.data.map(p => p.y)));
+      charts.pow.data.datasets.push(Object.assign({}, now, { data: [{ x: Ta, y: 0 }, { x: Ta, y: ptop }] }));
+      charts.pow.update();
+    })();
   }
 
   /* ---------------- main update ---------------- */
-  let tmr = null, last = null;
+  let tmr = null, swTmr = null;
   function update() {
-    const r = M.solve(P);
-    last = r;
-    renderReadouts(r);
-    Scene3D.update(r);
+    syncButtons(); syncSliders();
     clearTimeout(tmr);
-    tmr = setTimeout(() => { renderTwice(r); updateCharts(r); }, 120);
+    tmr = setTimeout(() => {
+      const res = M.CASES.map(c => ({ c, r: run(c.key, c.key === st.c ? 16 : 10) }));
+      const sel = res.find(x => x.c.key === st.c).r, base = res.find(x => x.c.key === 'normal').r;
+      renderCard(sel, base); renderTable(res);
+      Scene3D.update(sel);
+    }, 30);
+    clearTimeout(swTmr);
+    swTmr = setTimeout(sweep, 250);
   }
 
   /* ---------------- tab lifecycle ---------------- */
@@ -271,17 +236,9 @@
     if (on && !inited) {
       inited = true;
       Scene3D.init(document.getElementById('viewer'));
-      initCharts(); syncControls(); update();
+      initCharts(); buildSliders(); update(true);
     }
     Scene3D.setRunning(on);
   });
-
-  /* called by validation.js when the live calibration finishes */
-  window.Simulator = {
-    setFit(fit) {
-      Object.assign(PRESETS.now, { blockage: fit.blockage, Rf: fit.Rf_now });
-      Object.assign(PRESETS.summer, { blockage: fit.blockage, Rf: fit.Rf_summer });
-    },
-    params: () => P,
-  };
+  window.Simulator = { state: st, run };
 })();
