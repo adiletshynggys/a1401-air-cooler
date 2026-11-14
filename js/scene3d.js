@@ -9,10 +9,9 @@
   const S3 = {};
   let renderer, scene, camera, container, ctl, clock;
   let rowMeshes = [], debrisMeshes = [], mats = [], coilGroup, fans = [], particles, pdata;
-  let groundGrid, cageMats = [], fanGroup, fanKey = '', hoodGroup, cageGroup, filterGroup, sprayGroup, mist, spareGroup;
-  let state = { fan: 0.88, speed: 1.5, field: null, tmin: 0, tmax: 170, airOut: null, coilOn: false, hood: false, mistOn: false, tamb: 7 };
+  let hoodKey = '', groundGrid, cageMats = [], fanGroup, fanKey = '', hoodGroup, cageGroup, filterGroup, sprayGroup, mist, spareGroup;
+  let state = { fan: 0.88, speed: 1.5, field: null, tmin: 0, tmax: 170, airOut: null, coilOn: false, hood: false, mistOn: false, tamb: 7, hoodH: 5, hoodOver: 2.5, dark: false };
   const FAN_Y = 2.3;
-  const HOOD_H = 3.2, HOOD_R = 2.6;          // hood height above the top row and fillet radius
   let running = false, built = false;
 
   const L = 10.5, W = 3.0, ROWS = 6, BUNDLES = 6, GAP = 0.35;
@@ -70,37 +69,38 @@
   }
 
   /** Hood: rises from the top row and turns 90° with a round fillet to a side outlet (+x),
-   *  so rain, dust and insects cannot fall in from above. */
-  function buildHood() {
-    hoodGroup = new THREE.Group();
+   *  so rain, dust and insects cannot fall in from above. H = height above the top row
+   *  (= outlet height); the roof is carried `over` metres past the bundle end. */
+  function buildHood(H, over) {
+    clear(hoodGroup);
     const x0 = -L / 2 - 0.4, x1 = L / 2 + 0.4, y0 = topY + 0.05, t = 0.08;
+    const R = 0.8 * H, xe = x1 + over, lip = Math.min(0.6, 0.15 * H);
     const prof = (o) => {                                    // roof line, offset o inward
       const pts = [new THREE.Vector2(x0 + o, y0)];
-      const cx = x0 + HOOD_R, cy = y0 + HOOD_H - HOOD_R;
+      const cx = x0 + R, cy = y0 + H - R;
       pts.push(new THREE.Vector2(x0 + o, cy));
-      for (let a = 1; a <= 16; a++) {
-        const th = Math.PI - a * Math.PI / 2 / 16;
-        pts.push(new THREE.Vector2(cx + (HOOD_R - o) * Math.cos(th), cy + (HOOD_R - o) * Math.sin(th)));
+      for (let a = 1; a <= 20; a++) {
+        const th = Math.PI - a * Math.PI / 2 / 20;
+        pts.push(new THREE.Vector2(cx + (R - o) * Math.cos(th), cy + (R - o) * Math.sin(th)));
       }
-      pts.push(new THREE.Vector2(x1 + 1.2, y0 + HOOD_H - o));
+      pts.push(new THREE.Vector2(xe, y0 + H - o));
       return pts;
     };
     const outer = prof(0), inner = prof(t).reverse();
-    const shell = new THREE.Shape([...outer, new THREE.Vector2(x1 + 1.2, y0 + HOOD_H - 0.6), new THREE.Vector2(x1 + 1.2 - t, y0 + HOOD_H - 0.6), ...inner]);
+    const shell = new THREE.Shape([...outer, new THREE.Vector2(xe, y0 + H - lip), new THREE.Vector2(xe - t, y0 + H - lip), ...inner]);
     const depth = FW + 0.4;
     const sg = new THREE.ExtrudeGeometry(shell, { depth, bevelEnabled: false, curveSegments: 4 });
     sg.translate(0, 0, -depth / 2);
-    const mat = glassMat(0x9fb3c8, 0.62);
-    hoodGroup.add(new THREE.Mesh(sg, mat), edgeLine(sg, 0x4a5663));
-    // side cheeks (closed ends)
-    const cheek = new THREE.Shape([...outer, new THREE.Vector2(x1 + 1.2, y0 + HOOD_H - 0.6), new THREE.Vector2(x1, y0)]);
+    hoodGroup.add(new THREE.Mesh(sg, glassMat(0x9fb3c8, 0.62)), edgeLine(sg, 0x4a5663));
+    // side cheeks (closed ends); the bottom edge runs from the bundle end to the lip
+    const cheek = new THREE.Shape([...outer, new THREE.Vector2(xe, y0 + H - lip), new THREE.Vector2(x1, y0)]);
     for (const z of [-depth / 2, depth / 2]) {
       const cg = new THREE.ShapeGeometry(cheek); cg.translate(0, 0, z);
       hoodGroup.add(new THREE.Mesh(cg, glassMat(0x9fb3c8, 0.38)), edgeLine(cg, 0x4a5663));
     }
-    const lb = label('hood', 40); lb.position.set(x0 + 1.5, y0 + HOOD_H + 0.7, 0); hoodGroup.add(lb);
-    hoodGroup.visible = false; scene.add(hoodGroup);
+    const lb = label('hood', 40); lb.position.set(x0 + 1.5, y0 + H + 0.7, 0); hoodGroup.add(lb);
   }
+  const clear = g => { while (g.children.length) g.remove(g.children[0]); };
 
   function gridTexture(cell, line, color) {
     const c = document.createElement('canvas'); c.width = c.height = cell;
@@ -110,25 +110,25 @@
   }
 
   /** Outer wire-mesh cage around the whole cooler (sides, from grade to the hood). */
-  function buildCage() {
-    cageGroup = new THREE.Group();
-    const cx = L + 3.8, cz = FW + 2.0, h = topY + HOOD_H + 0.2;
+  function buildCage(H, over) {
+    clear(cageGroup); cageMats = [];
+    const xa = -L / 2 - 1.9, xb = L / 2 + 0.4 + over + 0.6;   // encloses the hood outlet
+    const cx = xb - xa, mx = (xa + xb) / 2, cz = FW + 2.0, h = topY + H + 0.3;
     const make = (w, rep) => {
       const tx = gridTexture(64, 2, '#ffffff'); tx.repeat.set(rep, h / 0.35);
-      const mat = new THREE.MeshBasicMaterial({ map: tx, color: 0x6b7785, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.55 });
+      const mat = new THREE.MeshBasicMaterial({ map: tx, color: state.dark ? 0xa9b6c3 : 0x6b7785, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.55 });
       cageMats.push(mat);
       return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
     };
-    const faces = [[cx, 0, cz / 2, 0], [cx, 0, -cz / 2, 0], [cz, cx / 2, 0, Math.PI / 2], [cz, -cx / 2, 0, Math.PI / 2]];
+    const faces = [[cx, mx, cz / 2, 0], [cx, mx, -cz / 2, 0], [cz, xb, 0, Math.PI / 2], [cz, xa, 0, Math.PI / 2]];
     for (const [w, x, z, ry] of faces) {
       const m = make(w, w / 0.35); m.position.set(x, h / 2, z); m.rotation.y = ry; cageGroup.add(m);
     }
     const posts = new THREE.MeshStandardMaterial({ color: 0x56606b });
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, h, 0.12), posts); p.position.set(sx * cx / 2, h / 2, sz * cz / 2); cageGroup.add(p);
+    for (const x of [xa, xb]) for (const sz of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, h, 0.12), posts); p.position.set(x, h / 2, sz * cz / 2); cageGroup.add(p);
     }
-    const lb = label('cage', 40); lb.position.set(-cx / 2, h + 0.5, cz / 2); cageGroup.add(lb);
-    cageGroup.visible = false; scene.add(cageGroup);
+    const lb = label('cage', 40); lb.position.set(xa, h + 0.5, cz / 2); cageGroup.add(lb);
   }
 
   /** Filter house around the fan inlet: pleated panels on the sides and in front (below). */
@@ -199,7 +199,7 @@
 
   /* ---------------- orbit controls (minimal, mouse + touch) ---------------- */
   function Orbit(cam, el) {
-    const o = { theta: -1.05, phi: 1.28, r: 27, target: new THREE.Vector3(0, 4.6, 0) };
+    const o = { theta: -1.05, phi: 1.25, r: 33, target: new THREE.Vector3(0.8, 5.6, 0) };
     const apply = () => {
       o.phi = Math.max(0.15, Math.min(Math.PI / 2 - 0.02, o.phi));
       o.r = Math.max(6, Math.min(80, o.r));
@@ -363,7 +363,9 @@
     }
     const gl = label('gas in, top row', 34); gl.position.set(-L / 2 - 0.4, topY + 1.4, bundleZ(0)); gl.scale.set(3.2, 1.2, 1); scene.add(gl);
 
-    buildHood(); buildCage(); buildFilters(); buildSpray(); buildSpare();
+    hoodGroup = new THREE.Group(); hoodGroup.visible = false; scene.add(hoodGroup);
+    cageGroup = new THREE.Group(); cageGroup.visible = false; scene.add(cageGroup);
+    buildFilters(); buildSpray(); buildSpare();
 
     // air particles
     const NP = 1800;
@@ -410,10 +412,10 @@
       let out = y > top;
       if (state.hood && y > topY) {
         // turn 90° under the hood and leave through the side outlet (+x)
-        const k = Math.min(1, (y - topY) / (HOOD_H * 0.55));
+        const k = Math.min(1, (y - topY) / (state.hoodH * 0.55));
         pa.array[i * 3] += dt * vBase * 1.6 * k;
         y += dt * vBase * (1 - k) * 1.2;
-        out = pa.array[i * 3] > L / 2 + 3.5;
+        out = pa.array[i * 3] > L / 2 + state.hoodOver + 1.5;
       } else y += dt * vBase * (inBundle ? 1.9 : 1);
       if (out || state.speed < 0.02 && y > top - 0.1) {
         y = FAN_Y + Math.random() * 0.3;
@@ -464,6 +466,7 @@
     scene.remove(groundGrid); groundGrid.geometry.dispose();
     groundGrid = dark ? new THREE.GridHelper(90, 45, 0x3a4652, 0x252f39) : new THREE.GridHelper(90, 45, 0xc5ccd3, 0xdde2e8);
     scene.add(groundGrid);
+    state.dark = dark;
     cageMats.forEach(m => m.color.set(dark ? 0xa9b6c3 : 0x6b7785));
   };
 
@@ -479,6 +482,8 @@
     // hardware of the solutions
     const fk = p.nFans + '|' + p.fanD;
     if (fk !== fanKey) { fanKey = fk; buildFans(p.nFans, p.fanD); sizeFilters(p.fanD); }
+    const hk = p.hoodH + '|' + p.hoodOverhang;
+    if (hk !== hoodKey) { hoodKey = hk; state.hoodH = p.hoodH; state.hoodOver = p.hoodOverhang; buildHood(p.hoodH, p.hoodOverhang); buildCage(p.hoodH, p.hoodOverhang); }
     hoodGroup.visible = !!p.hood; state.hood = !!p.hood;
     cageGroup.visible = !!p.cage;
     filterGroup.visible = !!p.filters;
@@ -487,7 +492,7 @@
     if (spareGroup.visible !== !!p.spare) {
       spareGroup.visible = !!p.spare;
       // frame both units, or just the main one
-      ctl.target.set(0, 4.6, p.spare ? -SPARE_DZ / 2 : 0); ctl.r = p.spare ? 50 : 30; ctl.apply();
+      ctl.target.set(0.8, 5.6, p.spare ? -SPARE_DZ / 2 : 0); ctl.r = p.spare ? 52 : 33; ctl.apply();
     }
     document.getElementById('cbMin').textContent = Math.round(state.tmin);
     document.getElementById('cbMax').textContent = Math.round(state.tmax);

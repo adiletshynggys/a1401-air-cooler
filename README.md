@@ -43,7 +43,7 @@ data/scenarios.json   output of tools/balance.py (scenarios.js = same data for f
 data/weather_uatg.csv hourly air temperature, Atyrau airport, Nov 2023 – Nov 2026
 tools/balance.py      plant mass and energy balance
 tools/weather.js      downloads the UATG METAR record, prints the case air temperatures
-tests/model.test.js   17 tests (node:test)
+tests/model.test.js   18 tests (node:test)
 ```
 
 ## Model (js/model.js)
@@ -104,7 +104,7 @@ Overall, per metre of tube: 1/UA' = 1/(h_i π d_i) + R_w' + 1/UA'_air.
 
 - Generic axial fan curve per fan: Δp = Δp₀ (s² − (q/Q₀)²), where s = fan output (treated as speed), Δp₀ = ψ₀ ρ u², Q₀ = φ₀ u D², u = π D n / 60 · k_fan. ψ₀ = 0.065 and φ₀ = 0.28 (**assumption**). This obeys the affinity laws: Q ∝ s, Δp ∝ s², P ∝ s³.
 - Fan: **one** forced-draft fan under the cooler (team information), Ø 4.2 m at 250 rpm (**assumption**, no datasheet). With one fan the fan-ring velocity head (K_plenum) dominates the system curve, so debris cuts the airflow less than it would with several fans; it hurts mainly by insulating the fins.
-- Solution 1 adds to the system curve: hood = (0.3 + 1) · ½ρv_out² − ½ρv_face², with the side outlet 45 % of the face area; cage = 0.5 · ½ρv_face²; filters = 80 Pa · (v_filter / 2.5 m/s)^1.5 with filter area 1.5 × face (all **assumptions**).
+- Solution 1 adds to the system curve: hood = (0.3 + 1) · ½ρv_out² − ½ρv_face², where the side outlet is as tall as the hood (default 5 m) and as wide as the cooler (18 m), and the roof reaches 2.5 m past the bundle end. A low hood chokes the air: at 100 % fan the airflow falls 12 % with a 1 m hood, 3 % at 2 m, 1.3 % at 3.2 m and 0.5 % at 5 m. Hot-air recirculation from the outlet back to the fan is not modelled; cage = 0.5 · ½ρv_face²; filters = 80 Pa · (v_filter / 2.5 m/s)^1.5 with filter area 1.5 × face (all **assumptions**).
 - Solution 2 spray: air reaching the fan T = T_amb − 0.7 (T_amb − T_wb), wet bulb from Stull (2011); off below 5 °C. Spray water = ṁ_air c_p ΔT / h_fg.
 - System curve: Σ row Δp (+ steam coil row) + K_plenum · ½ ρ v_fan², with K_plenum = 1.5 (**assumption**).
 - The operating point is the bisection intersection of the two curves. Fan shaft power = Q Δp / η_fan, η_fan = 0.70 (**assumption**); electric power uses η_motor = 0.93.
@@ -155,7 +155,7 @@ Only fouling is tuned (fan scaling held at 1). Results with one fan:
 | fin OD | 56.9 mm, back-calculated |
 | tube passes | 6 |
 | fan | 1 × Ø 4.2 m, 250 rpm, ψ₀ = 0.065, φ₀ = 0.28 |
-| hood, cage, filters | K 0.3 + outlet head at 45 % area; K 0.5; 80 Pa at 2.5 m/s, 1.5 × face |
+| hood, cage, filters | 5 m tall, 2.5 m past the bundle end, K 0.3 + outlet head; K 0.5; 80 Pa at 2.5 m/s, 1.5 × face |
 | fouling with solution 1 / online unit of solution 2 | 3 % blocked, R_f 0.02 / 12 % blocked, R_f 0.08 m²K/W |
 | spray | 70 % effectiveness, off below 5 °C |
 | fan efficiency | 0.70 |

@@ -85,6 +85,8 @@
       { k: 'sprayOpt', label: 'Water spray', type: 'seg', opts: [['on', 'On when needed'], ['off', 'Off']] },
     ];
     if (st.per[st.c].fanMode === 'manual') out.push({ k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0 });
+    if (p.hood) out.push({ k: 'hoodH', label: 'Hood height (= outlet height)', min: 1, max: 8, step: 0.1, unit: 'm', d: 1, tag: 'hood' },
+      { k: 'hoodOverhang', label: 'Hood reaches past bundle end', min: 0, max: 5, step: 0.1, unit: 'm', d: 1 });
     if (p.filters) out.push({ k: 'filterDp', label: 'Filter Δp at 2.5 m/s', min: 30, max: 250, step: 5, unit: 'Pa', d: 0, tag: 'filters' });
     if (p.spray) out.push({ k: 'sprayEff', label: 'Spray effectiveness', min: 0.3, max: 0.95, step: 0.01, unit: '', d: 2, tag: 'spray' });
     return out;
@@ -135,6 +137,9 @@
     const good = lowerIsBetter ? x < 0 : x > 0;
     return `<span class="dlt ${good ? 'good' : 'worse'}">${x > 0 ? '+' : '−'}${fmt(Math.abs(x), d)}${unit}</span>`;
   };
+  // air the fan can move at 100 % with this case's resistances (hood, cage, filters, debris)
+  const full = r => r._full || (r._full = M.solve(Object.assign({}, r.params, { fanPct: 100, nSeg: 4 })));
+  const qmax = r => full(r).airflow.Q;
   function renderCard(r, base) {
     const c = M.CASES.find(x => x.key === st.c), isN = st.c === 'normal', ok = r.Tout <= M.SETPOINT + 0.5;
     const row = (k, v, u, d) => `<tr><td>${k}</td><td class="n">${v} <small>${u}</small>${d || ''}</td></tr>`;
@@ -149,6 +154,8 @@
         ${row('Duty', fmt(r.Q / 1000, 2), 'MW')}
         ${row('Water condensed', fmt(r.condensed / 1000, 2), 't/h')}
         ${row('Air flow', fmt(r.airflow.Q, 0), 'm³/s')}
+        ${row('Max air flow (fan 100 %)', fmt(qmax(r), 0), 'm³/s', isN ? '' : dl(qmax(r), qmax(base), 0, ' m³/s', false))}
+        ${r.params.hood || r.params.cage || r.params.filters ? row('Hood + cage + filters at 100 %', fmt(full(r).airflow.sys.hood + full(r).airflow.sys.cage + full(r).airflow.sys.filter, 0), `of ${fmt(full(r).airflow.sys.total, 0)} Pa`) : ''}
         ${r.params.spray || r.params.sprayIdle ? row('Spray', r.sprayWater > 0 ? fmt(r.sprayWater, 2) : 'off', r.sprayWater > 0 ? `m³/h · air ${fmt(r.airflow.Tin, 1)} °C` : '(not needed)') : ''}
       </table>`;
   }

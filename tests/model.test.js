@@ -161,3 +161,11 @@ test('cases: normal reproduces the plant, solutions do better', () => {
     }
   }
 });
+
+test('a taller hood (bigger side outlet) costs less airflow', () => {
+  const q = H => M.solve({ hood: true, hoodH: H, fanPct: 100 }).airflow.Q;
+  const free = M.solve({ fanPct: 100 }).airflow.Q;
+  assert.ok(q(1) < q(2) && q(2) < q(5) && q(5) < free, 'monotone in height');
+  assert.ok(q(5) > 0.99 * free, 'default 5 m hood costs < 1 % of the air');
+  assert.ok(q(1) < 0.92 * free, 'a 1 m hood chokes the air');
+});

@@ -131,7 +131,8 @@
     nSeg: 16,
     // --- solution 1: rain/dust hood + outer cage + inlet filters ------------
     hood: false,
-    hoodOutletRatio: 0.45,        // hood side outlet area / bundle face area
+    hoodH: 5.0,                   // hood height above the top row, m = height of the side outlet
+    hoodOverhang: 2.5,            // roof carried past the bundle end, m (room for the turn, rain lip)
     hoodK: 0.3,                   // smooth 90° turn with round fillet (r/D ≥ 1), on outlet velocity
     cage: false,
     cageK: 0.5,                   // wire mesh, ~70 % open, on bundle face velocity
@@ -155,7 +156,7 @@
     passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
     nFans: 'One forced-draft fan under the cooler (team information). Fan datasheet not available.',
     fanD: 'No fan datasheet. 4.2 m assumed (a common large ACHE fan size).',
-    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet to a side outlet of 45 % of the face area; K = 0.3 for the turn plus one velocity head at the outlet.',
+    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a side outlet as tall as the hood and as wide as the cooler, carried 2.5 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
     cage: 'Outer wire-mesh cage, ~70 % open: K = 0.5 velocity heads at bundle face velocity.',
     filters: 'Coarse (G4) filter panels on the fan sides and in front of it, 1.5 × the bundle face area; 80 Pa at 2.5 m/s mid-life, Δp ∝ v^1.5.',
     clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked, R_f = 0.02 m²K/W (assumption).',
@@ -311,7 +312,8 @@
     const vFace = Q / g.Aface, qFace = 0.5 * air.rho * vFace * vFace;
     // hood: turn loss + higher exit velocity at the smaller side outlet (the plenum K
     // already holds one exit head at face velocity)
-    const vOut = vFace / p.hoodOutletRatio;
+    // side outlet: hood height × width of the cooler (all sections)
+    const vOut = Q / Math.max(0.1, p.hoodH * p.sections * 2 * p.bundleWidth);
     const hood = p.hood ? Math.max(0, (p.hoodK + 1) * 0.5 * air.rho * vOut * vOut - qFace) : 0;
     const cage = p.cage ? p.cageK * qFace : 0;
     const vFil = Q / (p.filterAreaRatio * g.Aface);
