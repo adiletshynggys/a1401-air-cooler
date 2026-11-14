@@ -142,7 +142,8 @@ main { max-width: 1480px; margin: 0 auto; padding: 20px 24px 40px; }
 .cmp th:first-child, .cmp td:first-child { text-align: left; }
 .cmp tbody tr { cursor: pointer; }
 .cmp tbody tr:hover { background: var(--line-2); }
-.cmp tbody tr.on { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); }
+.cmp tbody tr.on { background: var(--accent-soft); }
+.cmp tbody tr.on td:first-child b { color: var(--accent); }
 .cmp td .cs { color: var(--ink-3); font-size: 12px; margin-left: 6px; }
 .cmp .bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-right: 6px; opacity: .55; }
 .cmp .ok { color: var(--ok); font-weight: 600; } .cmp .bad { color: var(--bad); font-weight: 600; }
