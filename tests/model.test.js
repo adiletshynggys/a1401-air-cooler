@@ -163,9 +163,11 @@ test('cases: normal reproduces the plant, solutions do better', () => {
 });
 
 test('a taller hood (bigger side outlet) costs less airflow', () => {
-  const q = H => M.solve({ hood: true, hoodH: H, fanPct: 100 }).airflow.Q;
+  // opening = slanted face from the bundle end to the roof edge; with no overhang it is just the height
+  const q = (H, o) => M.solve({ hood: true, hoodH: H, hoodOverhang: o === undefined ? 0 : o, fanPct: 100 }).airflow.Q;
   const free = M.solve({ fanPct: 100 }).airflow.Q;
   assert.ok(q(1) < q(2) && q(2) < q(6) && q(6) < free, 'monotone in height');
-  assert.ok(q(6) > 0.975 * free, 'default 6 m hood costs < 2.5 % of the air');
+  assert.ok(q(6, 3) > 0.98 * free, 'default 6 m hood, 3 m overhang costs < 2 % of the air');
+  assert.ok(q(2, 3) > q(2, 0), 'the overhang widens the slanted opening');
   assert.ok(q(1) < 0.7 * free, 'a 1 m hood chokes the air');
 });

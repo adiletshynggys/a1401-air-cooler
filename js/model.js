@@ -157,8 +157,8 @@
     passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
     nFans: 'One forced-draft fan under the cooler (team information). Fan datasheet not available.',
     fanD: 'No fan datasheet. One 7 m fan assumed: at 160 rpm the tip speed is 59 m/s (API 661 limit 60 m/s) and the clean-bundle face velocity 2.35 m/s, typical for air coolers.',
-    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a side outlet as tall as the hood and as wide as the cooler, carried 3 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
-    cage: 'Wire-mesh screen (~70 % open) only across the hood outlet, instead of a cage round the whole cooler: same protection, far less material. K = 0.5 velocity heads at the outlet velocity.',
+    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a slanted side opening (from the bundle end up to the roof edge, as wide as the cooler), carried 3 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
+    cage: 'Wire-mesh screen (~70 % open) closing the whole hood opening: a tilted panel from the bundle end up to the roof edge, instead of a cage round the cooler. Same protection, far less material. K = 0.5 velocity heads at the velocity through the opening.',
     filters: 'Coarse (G4) filter panels on the fan sides and in front of it, 1.5 × the bundle face area; 80 Pa at 2.5 m/s mid-life, Δp ∝ v^1.5.',
     clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked, R_f = 0.02 m²K/W (assumption).',
     spare: 'Two identical coolers, swapped for cleaning every ~6 months. The online unit is on average part-way through its fouling cycle: 12 % blocked, R_f = 0.08 m²K/W (assumption).',
@@ -313,8 +313,8 @@
     const vFace = Q / g.Aface, qFace = 0.5 * air.rho * vFace * vFace;
     // hood: turn loss + higher exit velocity at the smaller side outlet (the plenum K
     // already holds one exit head at face velocity)
-    // side outlet: hood height × width of the cooler (all sections)
-    const vOut = Q / Math.max(0.1, p.hoodH * p.sections * 2 * p.bundleWidth);
+    // hood opening: the slanted face from the bundle end up to the roof edge, across the cooler
+    const vOut = Q / Math.max(0.1, Math.hypot(p.hoodH, p.hoodOverhang) * p.sections * 2 * p.bundleWidth);
     const hood = p.hood ? Math.max(0, (p.hoodK + 1) * 0.5 * air.rho * vOut * vOut - qFace) : 0;
     const cage = p.cage ? p.cageK * 0.5 * air.rho * (p.hood ? vOut * vOut : vFace * vFace) : 0;
     const vFil = Q / (p.filterAreaRatio * g.Aface);

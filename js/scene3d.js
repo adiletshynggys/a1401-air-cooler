@@ -110,19 +110,24 @@
     const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; return tx;
   }
 
-  /** Mesh screen across the hood outlet only (no cage round the cooler: same protection,
-   *  much less material). Without a hood it lies on top of the bundle. */
+  /** Mesh screen closing the hood opening: a tilted panel from the edge of the bundle top
+   *  (bundle end) up to the roof lip, so the whole opening, bottom included, is screened.
+   *  (No cage round the cooler: same protection, much less material.) */
   function buildCage(H, over) {
     clear(cageGroup); cageMats = [];
-    const tx = gridTexture(64, 3, '#ffffff');
-    const mat = new THREE.MeshBasicMaterial({ map: tx, color: state.dark ? 0xc3ced8 : 0x4a5663, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.8 });
+    const x1 = L / 2 + 0.4, xe = x1 + over, y0 = topY + 0.05, lip = Math.min(0.6, 0.15 * H), yt = y0 + H - lip;
+    const dx = xe - x1, dy = yt - y0, len = Math.hypot(dx, dy), depth = FW + 0.4;
+    const tx = gridTexture(64, 7, '#ffffff'); tx.repeat.set(len / 0.4, depth / 0.4);
+    const mat = new THREE.MeshBasicMaterial({ map: tx, color: state.dark ? 0xc3ced8 : 0x4a5663, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.85 });
     cageMats.push(mat);
-    const xe = L / 2 + 0.4 + over, y0 = topY + 0.05, lip = Math.min(0.6, 0.15 * H), h = H - lip, depth = FW + 0.4;
-    tx.repeat.set(depth / 0.25, h / 0.25);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(depth, h), mat);
-    m.rotation.y = Math.PI / 2; m.position.set(xe, y0 + h / 2, 0); cageGroup.add(m);
-    const fr = edgeLine(new THREE.PlaneGeometry(depth, h), 0x4a5663); fr.rotation.y = Math.PI / 2; fr.position.copy(m.position); cageGroup.add(fr);
-    const lb = label('outlet screen', 34); lb.scale.set(3.4, 1.3, 1); lb.position.set(xe + 0.8, y0 + h + 0.6, depth / 2 - 2); cageGroup.add(lb);
+    const geo = () => {                                   // plane along the slope (x-y) and across the cooler (z)
+      const g = new THREE.PlaneGeometry(len, depth);
+      g.rotateX(Math.PI / 2); g.rotateZ(Math.atan2(dy, dx)); g.translate((x1 + xe) / 2, (y0 + yt) / 2, 0);
+      return g;
+    };
+    const g = geo();
+    cageGroup.add(new THREE.Mesh(g, mat), edgeLine(geo(), 0x4a5663));
+    const lb = label('outlet screen', 34); lb.scale.set(3.4, 1.3, 1); lb.position.set(xe + 1.0, yt + 0.6, depth / 2 - 2); cageGroup.add(lb);
   }
 
   /** Filter house around the fan inlet: pleated panels on the sides and in front (below). */
