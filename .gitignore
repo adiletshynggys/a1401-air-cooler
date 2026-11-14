@@ -1,0 +1,8 @@
+# Plant data may be confidential: keep raw exports out of the public repo.
+data/*.csv
+data/*.tsv
+*.tsv
+attachment.txt
+.claude/
+node_modules/
+.DS_Store

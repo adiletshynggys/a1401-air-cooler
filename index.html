@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-1401 Air Cooler Model</title>
+<meta name="description" content="Thermal and hydraulic model of the A-1401 syngas air cooler: process overview, 3D simulator of debris fouling, plant data and validation. AIChE Catalyst hackathon.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230b5cad%27/%3E%3Cpath d=%27M3 6h10M3 8h10M3 10h10%27 stroke=%27white%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="tag">A-1401</span>
+    <div>
+      <h1>Syngas air cooler model</h1>
+      <p class="sub">Hydrogen plant cooling train · AIChE Catalyst hackathon</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <a href="#overview" role="tab" data-tab="overview">Process overview</a>
+    <a href="#simulator" role="tab" data-tab="simulator">A-1401 simulator</a>
+    <a href="#plant" role="tab" data-tab="plant">Plant data</a>
+    <a href="#validation" role="tab" data-tab="validation">Validation</a>
+  </nav>
+</header>
+
+<main>
+<!-- ================================================================ OVERVIEW -->
+<section id="tab-overview" class="tab" data-tab="overview">
+  <div class="intro">
+    <h2>Cooling train from CO shift to PSA</h2>
+    <p>Wet syngas leaves the CO shift at 429 °C and is cooled in five steps. A-1401 is the air cooler that must condense most of the water. Upstream, E-1408 should bring the gas to 137 °C but today delivers about 167 °C. At that temperature the gas carries almost three times as much water vapour, and A-1401 has to condense it.</p>
+  </div>
+  <div class="scen" role="group" aria-label="Scenario">
+    <span class="lbl">Scenario</span>
+    <button data-scen="0">Design</button>
+    <button data-scen="1">Winter 24-25</button>
+    <button data-scen="2">Summer 2025</button>
+    <button data-scen="3" class="on">Now</button>
+    <span class="scen-note" id="scenNote"></span>
+  </div>
+  <div class="flow-wrap">
+    <svg id="flowSvg" viewBox="0 0 1200 560" role="img" aria-label="Process flow diagram of the cooling train"></svg>
+  </div>
+  <div class="kpis" id="ovKpis"></div>
+  <p class="foot" id="ovFoot"></p>
+</section>
+
+<!-- ================================================================ SIMULATOR -->
+<section id="tab-simulator" class="tab" data-tab="simulator" hidden>
+  <div class="sim-grid">
+    <aside class="controls" id="controls">
+      <div class="presets" role="group" aria-label="Presets">
+        <button data-preset="clean">Clean bundle</button>
+        <button data-preset="now" class="on">Now (fitted)</button>
+        <button data-preset="summer">Summer (fitted)</button>
+        <button data-preset="design">Design</button>
+      </div>
+      <div id="sliders"></div>
+    </aside>
+
+    <div class="viewer">
+      <div class="canvas-wrap" id="viewer">
+        <div class="legend3d" id="legend3d">
+          <div class="cbar"></div>
+          <div class="cbar-lbl"><span id="cbMin">0</span><span>gas temperature, °C</span><span id="cbMax">170</span></div>
+        </div>
+        <div class="hint">Drag to rotate · Ctrl + scroll or pinch to zoom · right-drag to pan</div>
+        <div class="badge" id="spBadge"></div>
+      </div>
+      <div class="twice" id="twice"></div>
+    </div>
+
+    <aside class="readouts" id="readouts"></aside>
+  </div>
+
+  <div class="charts">
+    <figure class="chart"><figcaption><b>(a) Fan curve vs system curve</b><span>Debris makes the system curve steeper, so the operating point slides to less air.</span></figcaption><div class="cv"><canvas id="chFan"></canvas></div></figure>
+    <figure class="chart"><figcaption><b>(b) Duty and outlet T vs blockage</b><span>Fin-gap blockage at 0, 20 and 35 °C ambient, other settings as on the left.</span></figcaption><div class="cv"><canvas id="chBlock"></canvas></div></figure>
+    <figure class="chart"><figcaption><b>(c) Which rows do the work</b><span>Gas enters the top row. Rows are numbered from the bottom (air inlet).</span></figcaption><div class="cv"><canvas id="chRows"></canvas></div></figure>
+    <figure class="chart"><figcaption><b>(d) More fan power does not help a fouled bundle</b><span>Fan output swept 20–100 %. Each point is one fan setting.</span></figcaption><div class="cv"><canvas id="chPower"></canvas></div></figure>
+    <figure class="chart wide"><figcaption><b>(e) Design vs actual inlet temperature</b><span>Same cooler, same fouling: what the 30 K hotter inlet from E-1408 costs.</span></figcaption><div class="cv"><canvas id="chInlet"></canvas></div></figure>
+  </div>
+</section>
+
+<!-- ================================================================ PLANT DATA -->
+<section id="tab-plant" class="tab" data-tab="plant" hidden>
+  <div class="intro">
+    <h2>Plant data, hourly</h2>
+    <p>Load the hourly export (columns <code>timestamp, 1400TIA050, 1400TICA0055_pv, 1400TICA0055_mv, 1400PICA0017_mv, 1400FI010</code>, comma or tab separated). The file stays in your browser and is not uploaded anywhere. Frozen data (the same values repeated for 24 h or more, from about 2026-03-12) and shutdowns (FI010 &lt; 10,000 Nm³/h or TIA050 &lt; 120 °C) are excluded.</p>
+  </div>
+  <div class="loaders">
+    <label class="drop" id="dropPlant"><input type="file" id="filePlant" accept=".csv,.tsv,.txt"><b>Hourly plant CSV</b><span id="plantStatus">Drop the file here or click to choose</span></label>
+    <label class="drop" id="dropWx"><input type="file" id="fileWx" accept=".csv,.tsv,.txt"><b>Ambient weather CSV, Atyrau (UATG)</b><span id="wxStatus">Columns <code>timestamp, T_amb</code> (°C, hourly). Needed for the cleanliness factor.</span></label>
+  </div>
+  <div class="kpis" id="plantKpis"></div>
+  <div class="charts one">
+    <figure class="chart wide"><figcaption><b>Temperatures and fan output</b><span>Red bands: hours with the fans at 99 % or more, when the controller has run out of cooling capacity.</span></figcaption><div class="cv tall"><canvas id="chTs"></canvas></div></figure>
+    <figure class="chart wide"><figcaption><b>Dry syngas to PSA, FI010</b></figcaption><div class="cv"><canvas id="chFlow"></canvas></div></figure>
+    <figure class="chart wide" id="cfFig"><figcaption><b>Cleanliness factor UA<sub>actual</sub> / UA<sub>clean model</sub></b><span id="cfNote">Load the weather CSV to compute it (daily means, model inverted for UA).</span></figcaption><div class="cv"><canvas id="chCf"></canvas></div><div class="progress" id="cfProg" hidden><div></div></div></figure>
+  </div>
+</section>
+
+<!-- ================================================================ VALIDATION -->
+<section id="tab-validation" class="tab" data-tab="validation" hidden>
+  <div class="intro">
+    <h2>Validation against design and plant data</h2>
+    <p>Only two quantities are tuned: the fan scaling and the unknown fouling. Everything else comes from the drawings, the P&amp;ID, the lab analysis and <code>balance.py</code>, or is a labelled assumption.</p>
+  </div>
+  <div id="valBody"><p class="muted">Calibrating…</p></div>
+</section>
+</main>
+
+<footer class="foot-bar">
+  <span>Simplified engineering model, not a design tool. Values marked <span class="assume" tabindex="0" data-tip="Not in the drawings, P&amp;ID or plant data. Hover any tag like this one to see the reason.">assumption</span> are not confirmed by plant documents.</span>
+  <a href="README.md" id="repoLink">Model equations, assumptions and sources (README)</a>
+</footer>
+
+<!-- libraries: CDN first, local copy as offline fallback -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script>window.THREE || document.write('<script src="vendor/three.min.js"><\/script>')</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>window.Chart || document.write('<script src="vendor/chart.umd.min.js"><\/script>')</script>
+
+<script src="data/scenarios.js"></script>
+<script src="js/model.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/overview.js"></script>
+<script src="js/scene3d.js"></script>
+<script src="js/simulator.js"></script>
+<script src="js/plant.js"></script>
+<script src="js/validation.js"></script>
+</body>
+</html>
