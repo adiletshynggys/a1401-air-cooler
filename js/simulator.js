@@ -19,7 +19,7 @@
 
   function input(key, extra) {
     const o = Object.assign({}, st.per[key]); delete o.fanMode; delete o.sprayOpt;
-    if (st.per[key].sprayOpt) o.spray = st.per[key].sprayOpt === 'on';
+    if (st.per[key].sprayOpt) { o.spray = st.per[key].sprayOpt !== 'off'; o.sprayAuto = st.per[key].sprayOpt === 'auto'; }
     if (st.per[key].fanMode === 'auto') delete o.fanPct;
     return M.caseParams(key, W(), Object.assign({}, st.glob, o, extra || {}));
   }
@@ -58,6 +58,12 @@
   const toggleFs = () => setFs(!stage.classList.contains('fs'));
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage.classList.contains('fs')) setFs(false); });
   fsBtn.addEventListener('click', toggleFs);
+  const casingBtn = document.getElementById('casingBtn');
+  casingBtn.addEventListener('click', () => {
+    const solid = Scene3D.setCasing(!casingBtn.classList.contains('on'));
+    casingBtn.classList.toggle('on', solid);
+    casingBtn.title = solid ? 'Casing: solid (click for see-through)' : 'Casing: see-through (click for solid)';
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && stage.classList.contains('fs')) setFs(false);
     if ((e.key === 'f' || e.key === 'F') && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !document.getElementById('tab-simulator').hidden) toggleFs();
@@ -82,7 +88,7 @@
       { k: 'blockage', label: 'Fin gaps blocked', min: 0, max: 70, step: 1, unit: '%', d: 0, scale: 100 },
       { k: 'Rf', label: 'Debris resistance R_f', min: 0, max: 1, step: 0.005, unit: 'm²K/W', d: 3 },
       { k: 'fanMode', label: 'Fan control', type: 'seg', opts: [['auto', 'Auto to 65 °C'], ['manual', 'Manual']] },
-      { k: 'sprayOpt', label: 'Water spray', type: 'seg', opts: [['on', 'On when needed'], ['off', 'Off']] },
+      { k: 'sprayOpt', label: 'Water spray', type: 'seg', opts: [['on', 'On'], ['auto', 'Auto (when needed)'], ['off', 'Off']] },
     ];
     if (st.per[st.c].fanMode === 'manual') out.push({ k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0 });
     if (p.hood) out.push({ k: 'hoodH', label: 'Hood height (= outlet height)', min: 1, max: 8, step: 0.1, unit: 'm', d: 1, tag: 'hood' },
@@ -110,7 +116,7 @@
   function syncSliders() {
     const p = P();
     for (const c of CTLS) {
-      if (c.type === 'seg') { const cur = c.k === 'sprayOpt' ? (p.spray ? 'on' : 'off') : st.per[st.c][c.k];
+      if (c.type === 'seg') { const cur = c.k === 'sprayOpt' ? (p.spray ? (p.sprayAuto ? 'auto' : 'on') : 'off') : st.per[st.c][c.k];
         host.querySelectorAll(`.seg[data-k="${c.k}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === cur)); continue; }
       const v = (c.k === 'fanPct' ? st.per[st.c].fanPct : p[c.k]) * (c.scale || 1);
       const el = host.querySelector('#s-' + c.k); if (!el) continue;
@@ -155,8 +161,8 @@
         ${row('Water condensed', fmt(r.condensed / 1000, 2), 't/h')}
         ${row('Air flow', fmt(r.airflow.Q, 0), 'm³/s')}
         ${row('Max air flow (fan 100 %)', fmt(qmax(r), 0), 'm³/s', isN ? '' : dl(qmax(r), qmax(base), 0, ' m³/s', false))}
-        ${r.params.hood || r.params.cage || r.params.filters ? row('Hood + cage + filters at 100 %', fmt(full(r).airflow.sys.hood + full(r).airflow.sys.cage + full(r).airflow.sys.filter, 0), `of ${fmt(full(r).airflow.sys.total, 0)} Pa`) : ''}
-        ${r.params.spray || r.params.sprayIdle ? row('Spray', r.sprayWater > 0 ? fmt(r.sprayWater, 2) : 'off', r.sprayWater > 0 ? `m³/h · air ${fmt(r.airflow.Tin, 1)} °C` : '(not needed)') : ''}
+        ${r.params.hood || r.params.cage || r.params.filters ? row('Hood + screen + filters at 100 %', fmt(full(r).airflow.sys.hood + full(r).airflow.sys.cage + full(r).airflow.sys.filter, 0), `of ${fmt(full(r).airflow.sys.total, 0)} Pa`) : ''}
+        ${r.params.spray || r.params.sprayIdle ? row('Spray', r.sprayWater > 0 ? fmt(r.sprayWater, 2) : (r.params.sprayIdle ? 'standby' : 'off'), r.sprayWater > 0 ? `m³/h · air ${fmt(r.params.Tamb, 1)} → ${fmt(r.airflow.Tin, 1)} °C` : (r.params.sprayIdle ? '(not needed)' : `(below ${r.params.sprayMinT} °C)`)) : ''}
       </table>`;
   }
   function renderTable(res) {
@@ -204,7 +210,7 @@
         const { T, c } = tasks[i++];
         const glob = Object.assign({}, st.glob, { Tamb: T, RH: rhAt(T) });
         const o = Object.assign({}, st.per[c.key]); delete o.fanMode; delete o.sprayOpt; if (st.per[c.key].fanMode === 'auto') delete o.fanPct;
-        if (st.per[c.key].sprayOpt) o.spray = st.per[c.key].sprayOpt === 'on';
+        if (st.per[c.key].sprayOpt) { o.spray = st.per[c.key].sprayOpt !== 'off'; o.sprayAuto = st.per[c.key].sprayOpt === 'auto'; }
         const p = M.caseParams(c.key, W(), Object.assign(glob, o, { nSeg: 8 }));
         const r = st.per[c.key].fanMode === 'manual' ? M.solve(p) : M.autoFan(p);
         data[c.key].out.push({ x: T, y: r.Tout }); data[c.key].pow.push({ x: T, y: r.airflow.powerElectric / 1000 });

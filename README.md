@@ -4,12 +4,12 @@
 
 | Case | What changes in the model |
 |---|---|
-| **Normal** | Today: 50 % of fin gaps blocked, debris resistance R_f fitted to the plant outlet temperature (0.36–0.43 m²K/W). |
-| **Solution 1**: hood + cage + filters + spray | A hood over the top turns the air 90° with a round fillet to a side outlet, so rain, dust and insects cannot fall in. An outer wire-mesh cage and filter panels on the fan sides and in front of the fan keep debris out. The bundle is cleaned once and stays near-clean (3 % blocked, R_f 0.02). Water spray is fitted too and runs only when the fans alone cannot reach 65 °C. Costs: extra air-side pressure drop (hood turn + outlet, cage, filters). |
-| **Solution 2**: standby cooler + spray + 137 °C | A second identical cooler; one runs while the other is cleaned, so the online unit is on average early in its fouling cycle (12 % blocked, R_f 0.08). Water spray pre-cools the inlet air toward the wet bulb, only when the fans alone cannot reach 65 °C. E-1408 is restored, so the gas enters at 137 °C instead of ~167 °C. |
+| **Normal** | Today: 50 % of fin gaps blocked, debris resistance R_f fitted to the plant outlet temperature (0.40–0.47 m²K/W). |
+| **Solution 1**: hood + outlet screen + filters + spray | A hood over the top turns the air 90° with a round fillet to a side outlet, so rain, dust and insects cannot fall in. A mesh screen across the hood outlet (instead of a cage round the whole cooler) and filter panels on the fan sides and in front of the fan keep debris out. The bundle is cleaned once and stays near-clean (3 % blocked, R_f 0.02). Water spray is fitted too (On by default; Auto sprays only when the fans alone cannot reach 65 °C). Costs: extra air-side pressure drop (hood turn + outlet, screen, filters). |
+| **Solution 2**: standby cooler + spray + 137 °C | A second identical cooler; one runs while the other is cleaned, so the online unit is on average early in its fouling cycle (12 % blocked, R_f 0.08). Water spray pre-cools the inlet air toward the wet bulb (On, Auto or Off). E-1408 is restored, so the gas enters at 137 °C instead of ~167 °C. |
 | **1 + 2** | Both together. |
 
-Weather buttons: Winter (−3.4 °C), 14 Nov (7 °C), Summer mean (25.9 °C), Hot day (38 °C), from the Atyrau airport (UATG) records. The fan follows the plant controller TICA0055: the lowest output that reaches the 65 °C setpoint, else 100 %. The comparison table and the two charts (outlet temperature and fan power against air temperature) show every case at once. **Adjust** opens the sliders, including a water-spray switch for every case; the button at the top right, or the F key, makes the 3D view full screen.
+Weather buttons: Winter (−3.4 °C), 14 Nov (7 °C), Summer mean (25.9 °C), Hot day (38 °C), from the Atyrau airport (UATG) records. The fan follows the plant controller TICA0055: the lowest output that reaches the 65 °C setpoint, else 100 %. The comparison table and the two charts (outlet temperature and fan power against air temperature) show every case at once. **Adjust** opens the sliders, including hood size and a water-spray switch (On / Auto / Off) for every case; the cube button shows the casing (bundle side plates and plenum) see-through or solid as built; the button at the top right, or the F key, makes the 3D view full screen.
 
 No build step: plain HTML/CSS/JS, three.js and Chart.js from a CDN with local copies in `vendor/`. The second tab is the process overview of the cooling train. The sun/moon button switches between light and dark themes (default: the system setting).
 
@@ -36,7 +36,7 @@ Deployment: push to `main` and the workflow in `.github/workflows/pages.yml` run
 index.html            two tabs: simulator, process overview
 css/style.css
 js/model.js           all physics, the weather cases and the solutions (browser + node)
-js/scene3d.js         three.js model: bundles, one fan, hood, cage, filters, spray, standby unit
+js/scene3d.js         three.js model: bundles, one fan, casing, hood, outlet screen, filters, spray jets, standby unit
 js/simulator.js       case and weather buttons, readouts, comparison table, charts, full screen
 js/overview.js        process flow diagram
 data/scenarios.json   output of tools/balance.py (scenarios.js = same data for file://)
@@ -103,9 +103,9 @@ Overall, per metre of tube: 1/UA' = 1/(h_i π d_i) + R_w' + 1/UA'_air.
 ### Fans and the operating point
 
 - Generic axial fan curve per fan: Δp = Δp₀ (s² − (q/Q₀)²), where s = fan output (treated as speed), Δp₀ = ψ₀ ρ u², Q₀ = φ₀ u D², u = π D n / 60 · k_fan. ψ₀ = 0.065 and φ₀ = 0.28 (**assumption**). This obeys the affinity laws: Q ∝ s, Δp ∝ s², P ∝ s³.
-- Fan: **one** forced-draft fan under the cooler (team information), Ø 4.2 m at 250 rpm (**assumption**, no datasheet). With one fan the fan-ring velocity head (K_plenum) dominates the system curve, so debris cuts the airflow less than it would with several fans; it hurts mainly by insulating the fins.
-- Solution 1 adds to the system curve: hood = (0.3 + 1) · ½ρv_out² − ½ρv_face², where the side outlet is as tall as the hood (default 5 m) and as wide as the cooler (18 m), and the roof reaches 2.5 m past the bundle end. A low hood chokes the air: at 100 % fan the airflow falls 12 % with a 1 m hood, 3 % at 2 m, 1.3 % at 3.2 m and 0.5 % at 5 m. Hot-air recirculation from the outlet back to the fan is not modelled; cage = 0.5 · ½ρv_face²; filters = 80 Pa · (v_filter / 2.5 m/s)^1.5 with filter area 1.5 × face (all **assumptions**).
-- Solution 2 spray: air reaching the fan T = T_amb − 0.7 (T_amb − T_wb), wet bulb from Stull (2011); off below 5 °C. Spray water = ṁ_air c_p ΔT / h_fg.
+- Fan: **one** forced-draft fan under the cooler (team information), Ø 7 m at 160 rpm (**assumption**, no datasheet; tip speed 59 m/s, face velocity 2.35 m/s clean). With one fan the fan-ring velocity head (K_plenum) dominates the system curve, so debris cuts the airflow less than it would with several fans; it hurts mainly by insulating the fins.
+- Solution 1 adds to the system curve: hood = (0.3 + 1) · ½ρv_out² − ½ρv_face², where the side outlet is as tall as the hood (default 6 m) and as wide as the cooler (18 m), and the roof reaches 3 m past the bundle end. A low hood chokes the air: with the 7 m fan at 100 % the airflow falls 40 % with a 1 m hood, 17 % at 2 m, 7 % at 3.2 m, 3 % at 5 m and 2 % at 6 m. Hot-air recirculation from the outlet back to the fan is not modelled; outlet screen = 0.5 · ½ρv_out² (a mesh only across the hood outlet, not a cage round the cooler); filters = 80 Pa · (v_filter / 2.5 m/s)^1.5 with filter area 1.5 × face (all **assumptions**).
+- Spray (any case): air reaching the fan T = T_amb − 0.7 (T_amb − T_wb), wet bulb from Stull (2011); off below 5 °C. Spray water = ṁ_air c_p ΔT / h_fg.
 - System curve: Σ row Δp (+ steam coil row) + K_plenum · ½ ρ v_fan², with K_plenum = 1.5 (**assumption**).
 - The operating point is the bisection intersection of the two curves. Fan shaft power = Q Δp / η_fan, η_fan = 0.70 (**assumption**); electric power uses η_motor = 0.93.
 
@@ -131,17 +131,17 @@ Targets:
 
 Ambient temperatures are hourly METAR observations at Atyrau airport (UATG) from the Iowa Environmental Mesonet archive, averaged over the same period as each plant case (`node tools/weather.js`). Winter and summer are means over all hours of the period; 14 Nov is the 14:00 value.
 
-Only fouling is tuned (fan scaling held at 1). Results with one fan:
+Only fouling is tuned (fan scaling held at 1). Results with one 7 m fan:
 
 - **Duty and condensation match.** The model gives 4.84 MW (winter), 4.51 MW (14 Nov, 80 % latent) and 3.18 MW (summer), within 0.3 % of balance.py. The gas-duty routine reproduces all four scenarios.json cases within 1.5 % (balance.py uses CoolProp).
-- **The cooler works at about 10 % of the clean model's UA.**
-  - With the drawing geometry and the assumed fans, a clean A-1401 has UA ≈ 390 kW/K and would cool the gas almost to ambient.
-  - The plant behaves like UA ≈ 41 kW/K.
-  - The cleanliness factor UA_actual/UA_clean_model is 0.101 in winter 2024–25, 0.103 on 14 Nov and 0.087 in summer 2025, at measured air temperatures from −3 to 26 °C. The seasons agree within 18 %, so the loss belongs to the cooler, not the weather.
-  - With six 4.2 m fans instead of one the factors are 0.053–0.060. The fan layout changes the number, not the conclusion.
-- **Fitted fouling.** Fan scaling is held at 1.0: there is no airflow or fan-power measurement to fit it, and the clean design case is not binding. With 50 % of the fin gaps packed and fouling spread over all rows, the fitted R_f is 0.37 m²K/W (winter), 0.36 m²K/W (Nov) and 0.43 m²K/W (summer). Other blockage/R_f pairs fit equally well (0 % → 0.70, 35 % → 0.46, 70 % → 0.22 m²K/W). The plant points cannot separate them.
+- **The cooler works at about 6–7 % of the clean model's UA.**
+  - With the drawing geometry and the assumed fans, a clean A-1401 has UA ≈ 550 kW/K and would cool the gas almost to ambient.
+  - The plant behaves like UA ≈ 39 kW/K.
+  - The cleanliness factor UA_actual/UA_clean_model is 0.065 in winter 2024–25, 0.068 on 14 Nov and 0.060 in summer 2025, at measured air temperatures from −3 to 26 °C. The seasons agree within 13 %, so the loss belongs to the cooler, not the weather.
+  - With one 4.2 m fan the factors are 0.087–0.103, with six 4.2 m fans 0.053–0.060. The fan size changes the number, not the conclusion.
+- **Fitted fouling.** Fan scaling is held at 1.0: there is no airflow or fan-power measurement to fit it, and the clean design case is not binding. With 50 % of the fin gaps packed and fouling spread over all rows, the fitted R_f is 0.42 m²K/W (winter), 0.40 m²K/W (Nov) and 0.47 m²K/W (summer). Other blockage/R_f pairs fit equally well (0 % → 0.77, 35 % → 0.51, 70 % → 0.24 m²K/W). The plant points cannot separate them.
 - **Bottom-row fouling alone cannot explain the data.** With 95 % of the bottom row blocked and R_f = 1, the clean rows above still cool the gas to ambient. The loss is spread over the bundle, or the airflow is much lower than assumed.
-- **Caution.** To meet the design point (137 → 60 °C) at 38 °C air, the clean model needs only 10 % of its UA, about the same UA the plant shows now. Either the design carries a very large margin, or an assumption is optimistic: fan size and speed, tube passes, or fin geometry. These documents would settle it:
+- **Caution.** To meet the design point (137 → 60 °C) at 38 °C air, the clean model needs only 7 % of its UA, about the same UA the plant shows now. Either the design carries a very large margin, or an assumption is optimistic: fan size and speed, tube passes, or fin geometry. These documents would settle it:
   - fan datasheet: number, diameter, rpm, motor kW, pitch control;
   - API 661 data sheet: design duty, air flow, design air temperature, number of passes;
   - one measured fan current or air velocity.
@@ -154,8 +154,8 @@ Only fouling is tuned (fan scaling held at 1). Results with one fan:
 | fin density and thickness | 11 fpi, 0.40 mm |
 | fin OD | 56.9 mm, back-calculated |
 | tube passes | 6 |
-| fan | 1 × Ø 4.2 m, 250 rpm, ψ₀ = 0.065, φ₀ = 0.28 |
-| hood, cage, filters | 5 m tall, 2.5 m past the bundle end, K 0.3 + outlet head; K 0.5; 80 Pa at 2.5 m/s, 1.5 × face |
+| fan | 1 × Ø 7 m, 160 rpm, ψ₀ = 0.065, φ₀ = 0.28 |
+| hood, outlet screen, filters | 6 m tall, 3 m past the bundle end, K 0.3 + outlet head; K 0.5; 80 Pa at 2.5 m/s, 1.5 × face |
 | fouling with solution 1 / online unit of solution 2 | 3 % blocked, R_f 0.02 / 12 % blocked, R_f 0.08 m²K/W |
 | spray | 70 % effectiveness, off below 5 °C |
 | fan efficiency | 0.70 |

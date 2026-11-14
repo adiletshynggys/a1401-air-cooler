@@ -110,7 +110,7 @@
     fpi: 11, finT: 0.0004, finMaterial: 'Al',
     passes: 6,                    // assumption: one row per pass, gas enters the top row
     // --- fans (forced draft, underneath) --------------------------------
-    nFans: 1, fanD: 4.2, fanRpm: 250,  // one fan (team); size and speed assumed (no datasheet)
+    nFans: 1, fanD: 7.0, fanRpm: 160,  // one fan (team); size and speed assumed (no datasheet)
     psi0: 0.065,                  // shut-off static pressure coefficient Δp0/(ρ u_tip²)
     phi0: 0.28,                   // free-delivery flow coefficient Q0/(u_tip·D²)
     fanEff: 0.70, motorEff: 0.93,
@@ -131,16 +131,17 @@
     nSeg: 16,
     // --- solution 1: rain/dust hood + outer cage + inlet filters ------------
     hood: false,
-    hoodH: 5.0,                   // hood height above the top row, m = height of the side outlet
-    hoodOverhang: 2.5,            // roof carried past the bundle end, m (room for the turn, rain lip)
+    hoodH: 6.0,                   // hood height above the top row, m = height of the side outlet
+    hoodOverhang: 3.0,            // roof carried past the bundle end, m (room for the turn, rain lip)
     hoodK: 0.3,                   // smooth 90° turn with round fillet (r/D ≥ 1), on outlet velocity
-    cage: false,
-    cageK: 0.5,                   // wire mesh, ~70 % open, on bundle face velocity
+    cage: false,                  // mesh screen across the hood outlet (or the bundle top without a hood)
+    cageK: 0.5,                   // wire mesh, ~70 % open, on the velocity through it
     filters: false,
     filterDp: 80,                 // Pa at 2.5 m/s through the filter (coarse G4, mid-life)
     filterAreaRatio: 1.5,         // filter area (fan sides + front) / bundle face area
     // --- solution 2: standby cooler + water spray + lower inlet T ------------
     spray: false,
+    sprayAuto: false,             // true: spray only when the fans alone cannot reach the setpoint
     sprayEff: 0.7,                // evaporative pre-cooling effectiveness (approach to wet bulb)
     sprayMinT: 5,                 // spray off below this air temperature (freezing)
     RH: 44,                       // relative humidity of ambient air, %
@@ -155,15 +156,15 @@
     tubesPerBundle: 'Back-calculated: 226 m² bare / (π·0.025 m·10.5 m) = 274 tubes.',
     passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
     nFans: 'One forced-draft fan under the cooler (team information). Fan datasheet not available.',
-    fanD: 'No fan datasheet. 4.2 m assumed (a common large ACHE fan size).',
-    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a side outlet as tall as the hood and as wide as the cooler, carried 2.5 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
-    cage: 'Outer wire-mesh cage, ~70 % open: K = 0.5 velocity heads at bundle face velocity.',
+    fanD: 'No fan datasheet. One 7 m fan assumed: at 160 rpm the tip speed is 59 m/s (API 661 limit 60 m/s) and the clean-bundle face velocity 2.35 m/s, typical for air coolers.',
+    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a side outlet as tall as the hood and as wide as the cooler, carried 3 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
+    cage: 'Wire-mesh screen (~70 % open) only across the hood outlet, instead of a cage round the whole cooler: same protection, far less material. K = 0.5 velocity heads at the outlet velocity.',
     filters: 'Coarse (G4) filter panels on the fan sides and in front of it, 1.5 × the bundle face area; 80 Pa at 2.5 m/s mid-life, Δp ∝ v^1.5.',
     clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked, R_f = 0.02 m²K/W (assumption).',
     spare: 'Two identical coolers, swapped for cleaning every ~6 months. The online unit is on average part-way through its fouling cycle: 12 % blocked, R_f = 0.08 m²K/W (assumption).',
-    spray: 'Water spray at the air inlet: air cooled toward the wet bulb with 70 % effectiveness; off below 5 °C (freezing). Humidity: UATG METAR means.',
+    spray: 'Water spray nozzles round the filter house: inlet air cooled toward the wet bulb with 70 % effectiveness; off below 5 °C (freezing). On = always sprays; Auto = only when the fans alone cannot reach 65 °C. Humidity: UATG METAR means.',
     TinFix: 'E-1408 restored to its 137 °C design outlet, so A-1401 gets 137 °C instead of ~167 °C.',
-    fanRpm: 'No fan datasheet. 250 rpm gives a 55 m/s tip speed, below the API 661 limit of 60 m/s. Sets the fan curve via the affinity laws.',
+    fanRpm: 'No fan datasheet. 160 rpm keeps a 7 m fan under the 60 m/s API 661 tip-speed limit.',
     psi0: 'Generic axial-fan curve shape (shut-off pressure coefficient).',
     phi0: 'Generic axial-fan curve shape (free-delivery flow coefficient).',
     fanEff: 'Fan static efficiency, typical 0.65–0.75.',
@@ -315,7 +316,7 @@
     // side outlet: hood height × width of the cooler (all sections)
     const vOut = Q / Math.max(0.1, p.hoodH * p.sections * 2 * p.bundleWidth);
     const hood = p.hood ? Math.max(0, (p.hoodK + 1) * 0.5 * air.rho * vOut * vOut - qFace) : 0;
-    const cage = p.cage ? p.cageK * qFace : 0;
+    const cage = p.cage ? p.cageK * 0.5 * air.rho * (p.hood ? vOut * vOut : vFace * vFace) : 0;
     const vFil = Q / (p.filterAreaRatio * g.Aface);
     const filter = p.filters ? p.filterDp * Math.pow(vFil / 2.5, 1.5) : 0;
     return { total: bundle + coil + plenum + hood + cage + filter, bundle, coil, plenum, hood, cage, filter, rows };
@@ -646,10 +647,10 @@
   /* Air: UATG METAR means (tools/weather.js). Process: balance.py scenarios.
    * Rf: today's fouling fitted (50 % blockage, uniform) to the plant outlet. */
   const WEATHER = [
-    { key: 'winter', name: 'Winter', Tamb: -3.4, RH: 83, flow: 24119, Tin: 166.1, Rf: 0.371 },
-    { key: 'now', name: '14 Nov', Tamb: 7, RH: 87, flow: 20979, Tin: 166.9, Rf: 0.358 },
-    { key: 'summer', name: 'Summer', Tamb: 25.9, RH: 44, flow: 18122, Tin: 160.7, Rf: 0.434 },
-    { key: 'peak', name: 'Hot day', Tamb: 38, RH: 21, flow: 18122, Tin: 160.7, Rf: 0.434 },
+    { key: 'winter', name: 'Winter', Tamb: -3.4, RH: 83, flow: 24119, Tin: 166.1, Rf: 0.419 },
+    { key: 'now', name: '14 Nov', Tamb: 7, RH: 87, flow: 20979, Tin: 166.9, Rf: 0.401 },
+    { key: 'summer', name: 'Summer', Tamb: 25.9, RH: 44, flow: 18122, Tin: 160.7, Rf: 0.474 },
+    { key: 'peak', name: 'Hot day', Tamb: 38, RH: 21, flow: 18122, Tin: 160.7, Rf: 0.474 },
   ];
   const SETPOINT = 65;   // TICA0055
 
@@ -657,7 +658,7 @@
   const S2 = { spare: true, spray: true, Tin: 137, blockage: 0.12, Rf: 0.08 };
   const CASES = [
     { key: 'normal', name: 'Normal', sub: 'today, fouled', set: w => ({ blockage: 0.5, Rf: w.Rf }) },
-    { key: 's1', name: 'Solution 1', sub: 'hood + cage + filters + spray', set: () => S1 },
+    { key: 's1', name: 'Solution 1', sub: 'hood + outlet screen + filters + spray', set: () => S1 },
     { key: 's2', name: 'Solution 2', sub: 'standby cooler + spray + 137 °C', set: () => S2 },
     { key: 's12', name: '1 + 2', sub: 'all together', set: () => Object.assign({}, S2, S1) },
   ];
@@ -674,7 +675,7 @@
   function autoFan(input, sp) {
     sp = sp || SETPOINT;
     // spray is used only when the fans alone cannot reach the setpoint
-    if (input.spray) {
+    if (input.spray && input.sprayAuto) {
       const dry = solve(Object.assign({}, input, { spray: false, fanPct: 100 }));
       if (dry.Tout <= sp) return autoFan(Object.assign({}, input, { spray: false, sprayIdle: true }), sp);
     }
