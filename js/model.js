@@ -102,15 +102,15 @@
    * ------------------------------------------------------------------ */
   const DEFAULTS = {
     // --- geometry: drawing model code GP10.5×3-6-226-4.0S-23.4/DR -----
-    sections: 3, bundles: 6, tubeLength: 10.5, bundleWidth: 3.0, rows: 6,
+    sections: 1, bundles: 1, tubeLength: 10.5, bundleWidth: 3.0, rows: 6,   // drawing: ONE bundle 10.5 × 3.0 m, 6 rows
     tubesPerBundle: 274,          // back-calculated: 226 m² / (π·0.025·10.5)
     tubeOD: 0.025, tubeWall: 0.0025, tubeK: 44,   // 25×2.5 Q345E
     finRootD: 0.026,              // assumption: 0.5 mm Al liner of the bimetallic tube
     finOD: 0.0569,                // back-calculated to reproduce fin ratio 23.4
     fpi: 11, finT: 0.0004, finMaterial: 'Al',
-    passes: 6,                    // assumption: one row per pass, gas enters the top row
+    passes: 2,                    // drawing: 2 tube-side passes, 3 rows in parallel per pass, gas enters the top pass
     // --- fans (forced draft, underneath) --------------------------------
-    nFans: 1, fanD: 7.0, fanRpm: 160,  // one fan (team); size and speed assumed (no datasheet)
+    nFans: 3, fanD: 2.4, fanRpm: 477,  // drawing: 3 fans G-ZFS24L4, Ø 2400 mm, 477 rpm, 114,000 m³/h each
     psi0: 0.065,                  // shut-off static pressure coefficient Δp0/(ρ u_tip²)
     phi0: 0.28,                   // free-delivery flow coefficient Q0/(u_tip·D²)
     fanEff: 0.70, motorEff: 0.93,
@@ -131,15 +131,23 @@
     nSeg: 16,
     // --- solution 1: rain/dust hood + outer cage + inlet filters ------------
     hood: false,
-    hoodH: 6.0,                   // hood height above the top row, m = height of the side outlet
-    hoodOverhang: 3.0,            // roof carried past the bundle end, m (room for the turn, rain lip)
+    hoodH: 4.0,                   // hood height above the top row, m = height of the side outlet
+    hoodOverhang: 2.0,            // roof carried past the bundle side (long side), m (room for the turn)
+    hoodSlots: 0.3,               // open fraction of the curved end wall of the hood (aerodynamic slots for air circulation)
+    slotCd: 0.6,                  // discharge coefficient of the slots
     hoodK: 0.3,                   // smooth 90° turn with round fillet (r/D ≥ 1), on outlet velocity
     cage: false,                  // mesh screen across the hood outlet (or the bundle top without a hood)
     cageK: 0.5,                   // wire mesh, ~70 % open, on the velocity through it
     filters: false,
     filterDp: 80,                 // Pa at 2.5 m/s through the filter (coarse G4, mid-life)
     filterAreaRatio: 1.5,         // filter area (fan sides + front) / bundle face area
-    // --- solution 2: standby cooler + water spray + lower inlet T ------------
+    // --- intake screens (prevention) -----------------------------------------
+    screens: false,
+    screenK: 1.0,                 // coarse wire mesh / fluff screen, on the velocity through the gross screen area
+    screenAreaRatio: 3.3,         // screen area (all four sides under the bundle, 4 m high) / bundle face area
+    // --- robot compressed-air blowing from the top (cleaning, no hardware in the air path) ---
+    blast: false,
+    // --- water spray (+ optional standby cooler, kept for experiments) -------------
     spray: false,
     sprayAuto: false,             // true: spray only when the fans alone cannot reach the setpoint
     sprayEff: 0.7,                // evaporative pre-cooling effectiveness (approach to wet bulb)
@@ -154,17 +162,21 @@
     fpi: 'Typical for bimetallic rolled Al fins; reproduces fin ratio 23.4 with the other assumed dimensions.',
     finT: 'Typical rolled Al fin thickness; not on the drawing.',
     tubesPerBundle: 'Back-calculated: 226 m² bare / (π·0.025 m·10.5 m) = 274 tubes.',
-    passes: 'One row per pass (6 passes), consistent with "gas enters the top row" and the ~34 kPa tube-side Δp in balance.py. Not confirmed.',
-    nFans: 'One forced-draft fan under the cooler (team information). Fan datasheet not available.',
-    fanD: 'No fan datasheet. One 7 m fan assumed: at 160 rpm the tip speed is 59 m/s (API 661 limit 60 m/s) and the clean-bundle face velocity 2.35 m/s, typical for air coolers.',
-    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a slanted side opening (from the bundle end up to the roof edge, as wide as the cooler), carried 3 m past the bundle end. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet back to the fan inlet is not modelled.',
-    cage: 'Wire-mesh screen (~70 % open) closing the whole hood opening: a tilted panel from the bundle end up to the roof edge, instead of a cage round the cooler. Same protection, far less material. K = 0.5 velocity heads at the velocity through the opening.',
+    passes: 'Drawing VP-3212-A-1401-0001 / -0010 data sheet: 2 tube-side passes. The header has an upper (inlet) and a lower (outlet) chamber, so with 6 rows the gas goes along the top 3 rows, turns in the return header, and comes back along the bottom 3 rows. The split of rows between the passes is read from the end view, not stated.',
+    nFans: 'Drawing: three axial fans G-ZFS24L4, in a row under the bundle, one under each third of the 10.5 m tube length.',
+    fanD: 'Drawing: impeller Ø 2400 mm, 477 rpm (tip speed 60 m/s), 114,000 m³/h each at 190 Pa. The generic fan-curve shape (ψ0, φ0) is assumed, so the modelled 100 % flow differs a little from the rated 95 m³/s.',
+    hood: 'Hood: rises from the bundle top and turns 90° with a round fillet (radius ≈ 0.8 × height) to a slanted open side face on the long side of the cooler (from the bundle edge up to the roof edge, along the whole 10.5 m tube length), carried past the bundle side. The curved end wall has aerodynamic slots (30 % open, discharge coefficient 0.6) that add outlet area for air circulation. Loss: K = 0.3 for the turn plus one velocity head at the outlet. Hot-air recirculation from the outlet or the slots back to the fan inlet is not modelled.',
+    hoodSlots: 'Share of the curved end wall of the hood that is open (slots), and their discharge coefficient (0.6). Not from any drawing: a design choice to test.',
+    cage: 'Wire-mesh screen (~70 % open) closing the open side face of the hood: a tilted panel from the bundle end up to the roof edge, instead of a cage round the cooler. K = 0.5 velocity heads at the velocity through the opening.',
+    blast: 'Cleaning with compressed air only (no water, no blasting media), from a rail-mounted robot that travels over the top of the bundle and blows down onto the tubes; dry and safe for the aluminium fins. Modelled only through its result: averaged over a cleaning cycle the bundle is 12 % blocked with 15 % of the current debris resistance (assumption, between "just cleaned" and today). No hardware in the air path, so no extra pressure drop. Cleaning logistics (cell isolation, hours per cleaning, compressed-air use) are not modelled.',
+    screens: 'Coarse wire-mesh / fluff screens on all four sides under the bundle (fan side and the sides of the cooler), about 3.3 × the bundle face area, K = 1.0 on the velocity through the gross screen area (assumption; real mesh K depends on open area, 0.5–2). They stop large debris (fluff, seeds, insects, leaves), not fine dust.',
+    screensHood: 'Screens on all sides plus the hood: coarse debris is stopped at the inlet and rain and falling dust at the top, but fine dust still gets through. Averaged over the cycle: 8 % of fin gaps blocked and 11 % of the current debris resistance (assumption).',
     filters: 'Coarse (G4) filter panels on the fan sides and in front of it, 1.5 × the bundle face area; 80 Pa at 2.5 m/s mid-life, Δp ∝ v^1.5.',
-    clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked, R_f = 0.02 m²K/W (assumption).',
+    clean: 'With hood, cage and filters the bundle is cleaned once and then stays near-clean: 3 % of fin gaps blocked (assumption).',
     spare: 'Two identical coolers, swapped for cleaning every ~6 months. The online unit is on average part-way through its fouling cycle: 12 % blocked, R_f = 0.08 m²K/W (assumption).',
-    spray: 'Water spray nozzles round the filter house: inlet air cooled toward the wet bulb with 70 % effectiveness; off below 5 °C (freezing). On = always sprays; Auto = only when the fans alone cannot reach 65 °C. Humidity: UATG METAR means.',
+    spray: 'Water spray nozzles under each fan, blowing up into the inlet air: inlet air cooled toward the wet bulb with 70 % effectiveness; off below 5 °C (freezing). On = always sprays; Auto = only when the fans alone cannot reach 65 °C. Humidity: UATG METAR means.',
     TinFix: 'E-1408 restored to its 137 °C design outlet, so A-1401 gets 137 °C instead of ~167 °C.',
-    fanRpm: 'No fan datasheet. 160 rpm keeps a 7 m fan under the 60 m/s API 661 tip-speed limit.',
+    fanRpm: 'Drawing: 477 rpm at the top of the 25–50 Hz VFD range (tip speed 60 m/s, the API 661 limit).',
     psi0: 'Generic axial-fan curve shape (shut-off pressure coefficient).',
     phi0: 'Generic axial-fan curve shape (free-delivery flow coefficient).',
     fanEff: 'Fan static efficiency, typical 0.65–0.75.',
@@ -301,6 +313,16 @@
     return Math.max(0, fp.dp0 * (s * s - (q / fp.Q0) ** 2));
   }
 
+  /** Hood outlet area per metre of cooler length (opening on the long side), m. Two parts: (1) the open side face, slanted from
+   *  the bundle end up to the roof edge, length √(H² + overhang²); (2) the slotted curved end wall
+   *  (vertical part + quarter round of radius 0.8 H), of which a fraction hoodSlots is open and
+   *  discharges with coefficient slotCd. The 3D view draws the same wall. */
+  function hoodGeom(H, over, slots, cd) {
+    const R = 0.8 * H, wall = (H - R) + Math.PI / 2 * R;
+    const open = Math.hypot(H, over), slot = (slots || 0) * (cd === undefined ? 0.6 : cd) * wall;
+    return { R, wall, open, slot, len: open + slot };
+  }
+
   /** System resistance [Pa] at total air flow Q [m³/s]. */
   function systemDP(p, g, Q, air, blk) {
     const m = Q * air.rho;
@@ -313,13 +335,15 @@
     const vFace = Q / g.Aface, qFace = 0.5 * air.rho * vFace * vFace;
     // hood: turn loss + higher exit velocity at the smaller side outlet (the plenum K
     // already holds one exit head at face velocity)
-    // hood opening: the slanted face from the bundle end up to the roof edge, across the cooler
-    const vOut = Q / Math.max(0.1, Math.hypot(p.hoodH, p.hoodOverhang) * p.sections * 2 * p.bundleWidth);
+    // hood opening: on the long side of the cooler, from the bundle edge up to the roof edge, along the whole tube length
+    const vOut = Q / Math.max(0.1, hoodGeom(p.hoodH, p.hoodOverhang, p.hoodSlots, p.slotCd).len * p.tubeLength);
     const hood = p.hood ? Math.max(0, (p.hoodK + 1) * 0.5 * air.rho * vOut * vOut - qFace) : 0;
     const cage = p.cage ? p.cageK * 0.5 * air.rho * (p.hood ? vOut * vOut : vFace * vFace) : 0;
     const vFil = Q / (p.filterAreaRatio * g.Aface);
     const filter = p.filters ? p.filterDp * Math.pow(vFil / 2.5, 1.5) : 0;
-    return { total: bundle + coil + plenum + hood + cage + filter, bundle, coil, plenum, hood, cage, filter, rows };
+    const vScr = Q / (p.screenAreaRatio * g.Aface);
+    const screen = p.screens ? p.screenK * 0.5 * air.rho * vScr * vScr : 0;
+    return { total: bundle + coil + plenum + hood + cage + filter + screen, bundle, coil, plenum, hood, cage, filter, screen, rows };
   }
 
   /** Wet-bulb temperature [°C] from dry bulb and RH [%] — Stull (2011), ±0.3 K. */
@@ -645,22 +669,24 @@
    * 9. Weather cases and the solutions to compare
    * ------------------------------------------------------------------ */
   /* Air: UATG METAR means (tools/weather.js). Process: balance.py scenarios.
-   * Rf: today's fouling fitted (50 % blockage, uniform) to the plant outlet. */
+   * Rf: today's fouling fitted (50 % blockage, uniform; drawing geometry: 1 bundle, 2 passes, 3 fans) to the plant outlet. */
   const WEATHER = [
-    { key: 'winter', name: 'Winter', Tamb: -3.4, RH: 83, flow: 24119, Tin: 166.1, Rf: 0.419 },
-    { key: 'now', name: '14 Nov', Tamb: 7, RH: 87, flow: 20979, Tin: 166.9, Rf: 0.401 },
-    { key: 'summer', name: 'Summer', Tamb: 25.9, RH: 44, flow: 18122, Tin: 160.7, Rf: 0.474 },
-    { key: 'peak', name: 'Hot day', Tamb: 38, RH: 21, flow: 18122, Tin: 160.7, Rf: 0.474 },
+    { key: 'winter', name: 'Winter', Tamb: -3.4, RH: 83, flow: 24119, Tin: 166.1, Rf: 0.0224 },
+    { key: 'now', name: '14 Nov', Tamb: 7, RH: 87, flow: 20979, Tin: 166.9, Rf: 0.0225 },
+    { key: 'summer', name: 'Summer', Tamb: 25.9, RH: 44, flow: 18122, Tin: 160.7, Rf: 0.0362 },
+    { key: 'peak', name: 'Hot day', Tamb: 38, RH: 21, flow: 18122, Tin: 160.7, Rf: 0.0362 },
   ];
   const SETPOINT = 65;   // TICA0055
 
-  const S1 = { hood: true, cage: true, filters: true, spray: true, blockage: 0.03, Rf: 0.02 };
-  const S2 = { spare: true, spray: true, Tin: 137, blockage: 0.12, Rf: 0.08 };
+  // Fouling of the solutions, relative to today (assumptions): blockage as a fraction of fin gaps, R_f as a share of today's fitted R_f
+  const SB = w => ({ blast: true, blockage: 0.12, Rf: 0.15 * w.Rf });
+  const S2 = w => ({ screens: true, hood: true, cage: true, blockage: 0.08, Rf: 0.11 * w.Rf });
+  const S3 = w => Object.assign({}, S2(w), { spray: true });
   const CASES = [
     { key: 'normal', name: 'Normal', sub: 'today, fouled', set: w => ({ blockage: 0.5, Rf: w.Rf }) },
-    { key: 's1', name: 'Solution 1', sub: 'hood + outlet screen + filters + spray', set: () => S1 },
-    { key: 's2', name: 'Solution 2', sub: 'standby cooler + spray + 137 °C', set: () => S2 },
-    { key: 's12', name: '1 + 2', sub: 'all together', set: () => Object.assign({}, S2, S1) },
+    { key: 'blast', name: 'Solution 1', sub: 'robot compressed-air cleaning from the top', set: SB },
+    { key: 's2', name: 'Solution 2', sub: 'intake screens all round + hood', set: S2 },
+    { key: 's3', name: 'Solution 3', sub: 'screens + hood + water spray from below', set: S3 },
   ];
 
   /** Model input for a case in a weather, plus optional overrides. */
@@ -693,7 +719,7 @@
     DEFAULTS, ASSUMPTIONS, DRY, MWD, CPD, CPV, MW_W, NM3_PER_KMOL, FIN_K,
     psat, hfg, wsat, airProps, gasProps,
     geometry, rowBlockage, briggsYoung, finEfficiency, robinsonBriggsRow, rowDP, airRow,
-    fanParams, fanDP, systemDP, operatingPoint, curves,
+    fanParams, fanDP, systemDP, hoodGeom, operatingPoint, curves,
     gasDuty, gasDutyFine, tubeH, epsCross, solveCell, solve,
     bisect, fitUAFactor, fitBlockage,
   };

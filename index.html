@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A-1401 Air Cooler Simulator</title>
-<meta name="description" content="3D simulator of the A-1401 syngas air cooler: today's fouled cooler against two solutions. AIChE Catalyst hackathon.">
+<meta name="description" content="3D simulator of the A-1401 syngas air cooler: today's fouled cooler against three solutions. AIChE Catalyst hackathon.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230b5cad%27/%3E%3Cpath d=%27M3 6h10M3 8h10M3 10h10%27 stroke=%27white%27/%3E%3C/svg%3E">
 <script>try { var t = localStorage.getItem('a1401-theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="css/style.css">
@@ -48,11 +48,26 @@
     </div>
 
     <div class="ov card" id="card"></div>
+    <figure class="ov cfd-fig" id="robotFig" hidden>
+      <img src="img/robot-nozzles.jpg" alt="Rail-mounted cleaning robot with a nozzle manifold over a finned tube bundle">
+      <figcaption>Example of the rail-mounted cleaning robot: nozzle manifold travelling over the tube bundle.</figcaption>
+    </figure>
+    <figure class="ov cfd-fig" id="cfdFig" hidden>
+      <img src="img/cfd-frame-hood.jpg" alt="2D CFD geometry: heat exchanger frame with the tube bundle and the hood">
+      <figcaption>Heat exchanger frame and hood used in the CFD analysis (2D section).</figcaption>
+    </figure>
 
     <div class="ov legend3d">
       <div class="cbar"></div>
       <div class="cbar-lbl"><span id="cbMin">0</span><span>gas temperature, °C</span><span id="cbMax">170</span></div>
     </div>
+    <section class="ov fin-eq" aria-label="Finned-surface heat transfer">
+      <h3>Air side: heat transfer from the finned tubes</h3>
+      <div class="eq">Q̇<sub>total,fin</sub> = h · (A<sub>unfin</sub> + η<sub>fin</sub> · A<sub>fin</sub>) · (T<sub>b</sub> − T<sub>∞</sub>)</div>
+      <p>h – air-side heat transfer coefficient; A<sub>unfin</sub> – bare tube surface between the fins; A<sub>fin</sub> – fin surface;
+        η<sub>fin</sub> – fin efficiency (Schmidt method for circular fins); T<sub>b</sub> – tube wall (fin base) temperature; T<sub>∞</sub> – air temperature.
+        This finned-surface relation (Heat Transfer, Ch. 3: Extended Surfaces) is used in this model and was considered in the CFD analysis of the finned tube bundle.</p>
+    </section>
     <div class="ov hint">Drag to rotate · Ctrl + scroll to zoom · right-drag to pan</div>
   </div>
 
