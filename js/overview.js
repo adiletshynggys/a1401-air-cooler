@@ -47,7 +47,7 @@
     ${[880, 960].map(x => `<g transform="translate(${x} ${Y1 + 52})"><ellipse rx="26" ry="6" class="ln bgf"/>
       <g class="fanspin"><line x1="-22" x2="22" y1="0" y2="0" stroke="#0b5cad" stroke-width="2.5"/></g></g>`).join('')}
     <text class="tagname" x="920" y="${Y1 - 42}" text-anchor="middle">A-1401  air cooler</text>
-    <text class="desc" x="920" y="${Y1 + 80}" text-anchor="middle">3 sections · 6 bundles · forced draft</text>
+    <text class="desc" x="920" y="${Y1 + 80}" text-anchor="middle">1 bundle · 3 fans · forced draft</text>
     <text class="desc" id="a1401duty" x="920" y="${Y1 + 94}" text-anchor="middle"></text>
   </g>
 

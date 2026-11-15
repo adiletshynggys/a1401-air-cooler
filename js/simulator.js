@@ -7,9 +7,9 @@
 
   const NOTE = {
     normal: 'Today: 50 % of fin gaps blocked; debris resistance fitted to the plant outlet temperature for this weather.',
-    s1: [M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.filters, M.ASSUMPTIONS.clean, M.ASSUMPTIONS.spray].join(' '),
-    s2: [M.ASSUMPTIONS.spare, M.ASSUMPTIONS.spray, M.ASSUMPTIONS.TinFix].join(' '),
-    s12: 'Solution 1 and solution 2 together: protected bundle (hood, cage, filters), standby unit, spray and 137 °C inlet.',
+    blast: M.ASSUMPTIONS.blast,
+    s2: [M.ASSUMPTIONS.screens, M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.screensHood].join(' '),
+    s3: [M.ASSUMPTIONS.screens, M.ASSUMPTIONS.hood, M.ASSUMPTIONS.cage, M.ASSUMPTIONS.screensHood, M.ASSUMPTIONS.spray].join(' '),
   };
 
   /* ---------------- state ---------------- */
@@ -41,6 +41,8 @@
   function selectCase(k) { st.c = k; buildSliders(); update(false); }
   function syncButtons() {
     caseBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.c === st.c));
+    document.getElementById('cfdFig').hidden = st.c !== 's2';
+    document.getElementById('robotFig').hidden = st.c !== 'blast';
     wxBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.w === st.w && st.glob.Tamb === undefined));
   }
 
@@ -92,7 +94,8 @@
     ];
     if (st.per[st.c].fanMode === 'manual') out.push({ k: 'fanPct', label: 'Fan output', min: 0, max: 100, step: 1, unit: '%', d: 0 });
     if (p.hood) out.push({ k: 'hoodH', label: 'Hood height (= outlet height)', min: 1, max: 8, step: 0.1, unit: 'm', d: 1, tag: 'hood' },
-      { k: 'hoodOverhang', label: 'Hood reaches past bundle end', min: 0, max: 5, step: 0.1, unit: 'm', d: 1 });
+      { k: 'hoodOverhang', label: 'Hood reaches past bundle side', min: 0, max: 5, step: 0.1, unit: 'm', d: 1 },
+      { k: 'hoodSlots', label: 'Open share of slotted curved wall', min: 0, max: 0.6, step: 0.05, unit: '', d: 2, tag: 'hoodSlots' });
     if (p.filters) out.push({ k: 'filterDp', label: 'Filter Δp at 2.5 m/s', min: 30, max: 250, step: 5, unit: 'Pa', d: 0, tag: 'filters' });
     if (p.spray) out.push({ k: 'sprayEff', label: 'Spray effectiveness', min: 0.3, max: 0.95, step: 0.01, unit: '', d: 2, tag: 'spray' });
     return out;
@@ -161,7 +164,7 @@
         ${row('Water condensed', fmt(r.condensed / 1000, 2), 't/h')}
         ${row('Air flow', fmt(r.airflow.Q, 0), 'm³/s')}
         ${row('Max air flow (fan 100 %)', fmt(qmax(r), 0), 'm³/s', isN ? '' : dl(qmax(r), qmax(base), 0, ' m³/s', false))}
-        ${r.params.hood || r.params.cage || r.params.filters ? row('Hood + screen + filters at 100 %', fmt(full(r).airflow.sys.hood + full(r).airflow.sys.cage + full(r).airflow.sys.filter, 0), `of ${fmt(full(r).airflow.sys.total, 0)} Pa`) : ''}
+        ${r.params.hood || r.params.cage || r.params.filters || r.params.screens ? row('Added hardware at 100 %', fmt(full(r).airflow.sys.hood + full(r).airflow.sys.cage + full(r).airflow.sys.filter + (full(r).airflow.sys.screen || 0), 0), `of ${fmt(full(r).airflow.sys.total, 0)} Pa`) : ''}
         ${r.params.spray || r.params.sprayIdle ? row('Spray', r.sprayWater > 0 ? fmt(r.sprayWater, 2) : (r.params.sprayIdle ? 'standby' : 'off'), r.sprayWater > 0 ? `m³/h · air ${fmt(r.params.Tamb, 1)} → ${fmt(r.airflow.Tin, 1)} °C` : (r.params.sprayIdle ? '(not needed)' : `(below ${r.params.sprayMinT} °C)`)) : ''}
       </table>`;
   }
@@ -182,7 +185,7 @@
 
   /* ---------------- charts: sweep of air temperature ---------------- */
   const charts = {};
-  const C = { normal: '#b3261e', s1: UI.SERIES[0], s2: UI.SERIES[2], s12: UI.SERIES[3] };
+  const C = { normal: '#b3261e', blast: UI.SERIES[1], s2: UI.SERIES[0], s3: UI.SERIES[2] };
   const TS = [-15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40];
   // typical Atyrau humidity vs air temperature (UATG means: 85 % in winter, 44 % summer mean, 21 % above 35 °C)
   const rhAt = T => T <= 7 ? 85 : T <= 26 ? 85 - (T - 7) * (41 / 19) : Math.max(15, 44 - (T - 26) * (23 / 12));
@@ -216,7 +219,7 @@
         data[c.key].out.push({ x: T, y: r.Tout }); data[c.key].pow.push({ x: T, y: r.airflow.powerElectric / 1000 });
       }
       if (i < tasks.length) return setTimeout(step, 0);
-      const col = k => k === 's1' ? UI.css('--accent') : k === 'normal' ? UI.css('--bad') : C[k];
+      const col = k => k === 's2' ? UI.css('--accent') : k === 'normal' ? UI.css('--bad') : C[k];
       const ds = k => M.CASES.map(c => ({ label: c.name, data: data[c.key][k], borderColor: col(c.key),
         borderWidth: c.key === st.c ? 3 : 1.6, pointRadius: c.key === st.c ? 2.5 : 0, pointBackgroundColor: col(c.key) }));
       const Ta = st.glob.Tamb !== undefined ? st.glob.Tamb : W().Tamb;
